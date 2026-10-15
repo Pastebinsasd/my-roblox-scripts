@@ -855,9 +855,9 @@ function PuckUI:CreateWindow(settings)
         Parent = main,
     })
 
-    local titleLabel = codeLabel(titleBar, settings.Name or settings.Title or "Aztup Hub V3", 13, Theme.BrightText, 11)
+    local titleLabel = codeLabel(titleBar, settings.Name or settings.Title or "Mid Hub", 13, Theme.BrightText, 11)
     titleLabel.Position = UDim2.fromOffset(6, 0)
-    titleLabel.Size = UDim2.new(1, -52, 1, 0)
+    titleLabel.Size = UDim2.new(1, -74, 1, 0)
 
     local close = create("TextButton", {
         Name = "Close",
@@ -891,10 +891,26 @@ function PuckUI:CreateWindow(settings)
         Parent = titleBar,
     })
 
+    local searchBtn = create("TextButton", {
+        Name = "SearchBtn",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -40, 0, 2),
+        Size = UDim2.fromOffset(18, 18),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Font = Enum.Font.Code,
+        Text = "⌕",
+        TextSize = 14,
+        TextColor3 = Theme.Accent,
+        ZIndex = 15,
+        Parent = titleBar,
+    })
+
     local dragHandle = create("TextButton", {
         Name = "DragHandle",
         Position = UDim2.fromOffset(0, 0),
-        Size = UDim2.new(1, -42, 1, 0),
+        Size = UDim2.new(1, -62, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         AutoButtonColor = false,
@@ -2189,6 +2205,307 @@ function PuckUI:CreateWindow(settings)
     end
 
     ------------------------------------------------------------------------
+    -- GLOBAL SEARCH PALETTE (FIGMA TO ROBLOX SPECIFICATION)
+    ------------------------------------------------------------------------
+    window.SearchItems = {}
+
+    local searchPalette = create("Frame", {
+        Name = "SearchPalette",
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 28),
+        Size = UDim2.new(1, -24, 0, 250),
+        BackgroundColor3 = Color3.fromRGB(17, 18, 20),
+        BorderColor3 = Theme.BorderDark,
+        BorderSizePixel = 1,
+        Visible = false,
+        ZIndex = 50,
+        Parent = main,
+    })
+    create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = searchPalette })
+    create("UIStroke", { Color = Theme.Border, Thickness = 1.2, Parent = searchPalette })
+
+    local searchInputFrame = create("Frame", {
+        Name = "SearchInputFrame",
+        Position = UDim2.fromOffset(8, 8),
+        Size = UDim2.new(1, -16, 0, 36),
+        BackgroundColor3 = Theme.Element,
+        BorderColor3 = Theme.BorderDark,
+        BorderSizePixel = 1,
+        ZIndex = 51,
+        Parent = searchPalette,
+    })
+    create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = searchInputFrame })
+    create("UIStroke", { Color = Theme.BorderDark, Thickness = 1, Parent = searchInputFrame })
+
+    local searchIconLabel = create("TextLabel", {
+        Position = UDim2.fromOffset(10, 0),
+        Size = UDim2.fromOffset(20, 36),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Code,
+        Text = "⌕",
+        TextSize = 16,
+        TextColor3 = Theme.Accent,
+        ZIndex = 52,
+        Parent = searchInputFrame,
+    })
+
+    local searchBox = create("TextBox", {
+        Name = "SearchBox",
+        Position = UDim2.fromOffset(32, 0),
+        Size = UDim2.new(1, -80, 1, 0),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamMedium,
+        Text = "",
+        PlaceholderText = "Search features... (Ctrl+K)",
+        PlaceholderColor3 = Theme.DimText,
+        TextColor3 = Theme.BrightText,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+        ZIndex = 52,
+        Parent = searchInputFrame,
+    })
+
+    local searchKbdHint = create("TextLabel", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -8, 0.5, 0),
+        Size = UDim2.fromOffset(42, 20),
+        BackgroundColor3 = Color3.fromRGB(26, 27, 30),
+        BorderSizePixel = 0,
+        Font = Enum.Font.Code,
+        Text = "ESC",
+        TextColor3 = Theme.DimText,
+        TextSize = 10,
+        ZIndex = 52,
+        Parent = searchInputFrame,
+    })
+    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = searchKbdHint })
+
+    local searchResultsScroll = create("ScrollingFrame", {
+        Name = "SearchResults",
+        Position = UDim2.fromOffset(8, 50),
+        Size = UDim2.new(1, -16, 1, -58),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Accent,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ZIndex = 52,
+        Parent = searchPalette,
+    })
+    local searchLayout = create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        Padding = UDim.new(0, 4),
+        Parent = searchResultsScroll,
+    })
+
+    local function clearSearchResults()
+        for _, child in ipairs(searchResultsScroll:GetChildren()) do
+            if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
+                child:Destroy()
+            end
+        end
+    end
+
+    function window:RegisterSearchItem(tab, name, row, controlType)
+        if not name or name == "" then return end
+        table.insert(self.SearchItems, {
+            Name = tostring(name),
+            Tab = tab,
+            TabName = tab.Name,
+            Row = row,
+            Type = controlType or "Feature",
+        })
+    end
+
+    function window:CloseSearch()
+        searchPalette.Visible = false
+        searchBox.Text = ""
+        clearSearchResults()
+    end
+
+    function window:OpenSearch()
+        searchPalette.Visible = true
+        searchBox:CaptureFocus()
+        self:FilterSearch(searchBox.Text)
+    end
+
+    function window:ToggleSearch()
+        if searchPalette.Visible then
+            self:CloseSearch()
+        else
+            self:OpenSearch()
+        end
+    end
+
+    searchBtn.MouseButton1Click:Connect(function()
+        window:ToggleSearch()
+    end)
+
+    function window:FilterSearch(query)
+        clearSearchResults()
+        query = string.lower(tostring(query or "")):gsub("^%s+", ""):gsub("%s+$", "")
+
+        local tokens = {}
+        for t in string.gmatch(query, "%S+") do table.insert(tokens, t) end
+
+        local matches = {}
+        if #tokens == 0 then
+            -- Show top 4 popular features when search is opened empty
+            local quickNames = { "auto fishing", "sell", "best rod", "quest", "rewards" }
+            for _, item in ipairs(self.SearchItems) do
+                local lowerName = string.lower(item.Name)
+                for _, qn in ipairs(quickNames) do
+                    if string.find(lowerName, qn, 1, true) then
+                        table.insert(matches, item)
+                        break
+                    end
+                end
+                if #matches >= 5 then break end
+            end
+        else
+            for _, item in ipairs(self.SearchItems) do
+                local hay = string.lower(item.Name .. " " .. item.TabName .. " " .. item.Type)
+                local allMatch = true
+                for _, token in ipairs(tokens) do
+                    if not string.find(hay, token, 1, true) then
+                        allMatch = false
+                        break
+                    end
+                end
+                if allMatch then
+                    table.insert(matches, item)
+                    if #matches >= 12 then break end
+                end
+            end
+        end
+
+        if #matches == 0 then
+            local emptyRow = create("TextLabel", {
+                Size = UDim2.new(1, -4, 0, 32),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamMedium,
+                Text = "No features found for '" .. query .. "'",
+                TextColor3 = Theme.DimText,
+                TextSize = 11,
+                ZIndex = 53,
+                Parent = searchResultsScroll,
+            })
+            return
+        end
+
+        for _, item in ipairs(matches) do
+            local row = create("TextButton", {
+                Name = "SearchResult_" .. item.Name,
+                Size = UDim2.new(1, -4, 0, 28),
+                BackgroundColor3 = Theme.Element,
+                BorderColor3 = Theme.BorderDark,
+                BorderSizePixel = 1,
+                AutoButtonColor = false,
+                Text = "",
+                ZIndex = 53,
+                Parent = searchResultsScroll,
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = row })
+
+            local icon = create("TextLabel", {
+                Position = UDim2.fromOffset(8, 0),
+                Size = UDim2.fromOffset(16, 28),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.Code,
+                Text = "⌕",
+                TextSize = 12,
+                TextColor3 = Theme.Accent,
+                ZIndex = 54,
+                Parent = row,
+            })
+
+            local nameLabel = create("TextLabel", {
+                Position = UDim2.fromOffset(28, 0),
+                Size = UDim2.new(1, -110, 1, 0),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamMedium,
+                Text = item.Name,
+                TextColor3 = Theme.BrightText,
+                TextSize = 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 54,
+                Parent = row,
+            })
+
+            local tabBadge = create("TextLabel", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -6, 0.5, 0),
+                Size = UDim2.fromOffset(70, 18),
+                BackgroundColor3 = Color3.fromRGB(26, 27, 30),
+                BorderSizePixel = 0,
+                Font = Enum.Font.GothamBold,
+                Text = item.TabName,
+                TextColor3 = Theme.Accent,
+                TextSize = 9,
+                ZIndex = 54,
+                Parent = row,
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = tabBadge })
+
+            setHover(row, Theme.Element, Theme.ElementHover)
+
+            row.MouseButton1Click:Connect(function()
+                window:CloseSearch()
+                window:SelectTab(item.Tab)
+
+                -- Visual flash animation on selected control
+                if item.Row then
+                    task.spawn(function()
+                        local stroke = Instance.new("UIStroke")
+                        stroke.Color = Theme.Accent
+                        stroke.Thickness = 2
+                        stroke.Parent = item.Row
+                        pcall(function()
+                            if item.Tab.Container and item.Row.Position then
+                                item.Tab.Container.CanvasPosition = Vector2.new(0, math.max(0, item.Row.Position.Y.Offset - 40))
+                            end
+                        end)
+                        task.wait(1.5)
+                        for t = 0, 1, 0.1 do
+                            stroke.Transparency = t
+                            task.wait(0.02)
+                        end
+                        stroke:Destroy()
+                    end)
+                end
+            end)
+        end
+    end
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        window:FilterSearch(searchBox.Text)
+    end)
+
+    searchBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and #searchResultsScroll:GetChildren() > 1 then
+            local first = searchResultsScroll:GetChildren()[2]
+            if first and first:IsA("TextButton") then
+                -- activate first match
+                first.MouseButton1Click:Fire()
+            end
+        end
+    end)
+
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if input.KeyCode == Enum.KeyCode.Escape and searchPalette.Visible then
+            window:CloseSearch()
+        elseif not processed and input.KeyCode == Enum.KeyCode.K then
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
+                window:ToggleSearch()
+            end
+        end
+    end)
+
+    ------------------------------------------------------------------------
     -- Tabs and controls
     ------------------------------------------------------------------------
     function window:CreateTab(tabName, _icon)
@@ -2590,6 +2907,7 @@ function PuckUI:CreateWindow(settings)
             end
 
             local row = addControlFrame(24)
+            window:RegisterSearchItem(self, requestedName, row, "Button")
 
             local buttonControl = create("TextButton", {
                 Position = UDim2.fromOffset(0, 1),
@@ -2630,6 +2948,7 @@ function PuckUI:CreateWindow(settings)
             data = data or {}
 
             local row = addControlFrame(18)
+            window:RegisterSearchItem(self, data.Name or "Toggle", row, "Toggle")
             local state = data.CurrentValue == true
             local flag = data.Flag
 
@@ -3022,6 +3341,7 @@ function PuckUI:CreateWindow(settings)
 
             -- Sliders redesigned for Aztup format: thicker bar, value inside.
             local row = addControlFrame(34)
+            window:RegisterSearchItem(self, data.Name or "Slider", row, "Slider")
             local minimum = tonumber(data.Range and data.Range[1] or data.Min) or 0
             local maximum = tonumber(data.Range and data.Range[2] or data.Max) or 100
             local increment = tonumber(data.Increment) or 1
