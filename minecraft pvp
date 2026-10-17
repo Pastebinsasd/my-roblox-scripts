@@ -1,8 +1,8 @@
 --[[
     ========================================================================
-    ⚡ MID HUB — MINECRAFT PVP [HVH EDITION: KILL AURA, AUTO TRAP, SPINBOT & KEYBINDS HUD] ⚡
+    ⚡ MID HUB — ⚔️1.8 PVP CLUB [HVH EDITION: KILL AURA, AUTO TRAP & YAW] ⚡
     ========================================================================
-    Supported Game: Minecraft PvP / Duels / BoxPvP (PlaceId: 102518817130593)
+    Supported Game: ⚔️1.8 PVP Club / Duels / BoxPvP (PlaceId: 102518817130593)
     Official Hub:   https://github.com/Pastebinsasd/my-roblox-scripts
     Gateway:        https://fluzzy.kwierzchowski565.workers.dev/?game=mcpvp
     Discord:        https://discord.gg/h2xwyETur
@@ -366,29 +366,6 @@ end
 -- =========================================================================
 createKeyModal(function()
     print("[Mid Hub] Minecraft PvP verified successfully. Launching Suite...")
-
-    ========================================================================
-    ⚡ MID HUB — MINECRAFT PVP [HVH EDITION: KILL AURA, AUTO TRAP, SPINBOT & KEYBINDS HUD] ⚡
-    ========================================================================
-    Supported Game: Minecraft PvP / Duels / BoxPvP (PlaceId: 102518817130593)
-    Official Hub:   https://github.com/Pastebinsasd/my-roblox-scripts
-    Gateway:        https://fluzzy.kwierzchowski565.workers.dev/?game=oneblock
-    Discord:        https://discord.gg/h2xwyETur
-
-    ⭐ HVH FEATURES INCLUDED:
-      [+] Interactive Draggable KEYBINDS HUD (Click key pill to rebind, live ON/OFF badges, Minimize "-")
-      [+] Custom HvH Toggle Notifications (Slide-in ON/OFF alerts + Sound + Maclib Notify)
-      [+] Silent Kill Aura (360° Head/Body Hitbox, Reach Expander, Auto-BlockHit, Target Strafe)
-      [+] Anti-Aim & Yaw Controller (360° Spinbot, Jitter Desync, Backwards Yaw, Target Lock Yaw, Twerk/Sneak Spam)
-      [+] Auto Trap / Auto Box Enemy (Instant 3.2-Grid Cobblestone Cage + Roof Cap + Auto Tool Swap)
-      [+] Auto Break / Self-Unbox (Auto Pickaxe Mine Escape) & GodBridge / Scaffold
-      [+] True Anti-Knockback / Velocity (0%–100% Horizontal & Vertical via MinecraftKnockbackMotion Hook)
-      [+] NoSlowdown (No Cobweb Slow, No SoulSand Slow, Move Fast While Eating Gapple / Blocking / Bow)
-      [+] Speed, Bhop, Air Strafe, Flight, Noclip & Auto Sprint
-      [+] Auto Golden Apple & Silent Bow Aimbot
-      [+] Cosmetics Unlocker (All Sword Skins, Particle Auras & Minecraft Skins) + 2D HvH ESP
-    ========================================================================
-]]
 
 repeat task.wait() until game:IsLoaded()
 
