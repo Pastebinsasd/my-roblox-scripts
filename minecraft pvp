@@ -478,6 +478,13 @@ local CFG = {
     sneakSpam         = false,
     thirdPersonHvH    = false,
 
+    -- Fake Lag & Desync (HvH Choke & Ghost)
+    fakeLagEnabled    = false,
+    fakeLagMode       = "Jitter",
+    fakeLagChokeTicks = 5,
+    fakeLagGhost      = true,
+    fakeLagAcGuard    = true,
+
     -- Auto Trap / Block Cage
     autoTrap          = false,
     trapRange         = 15,
@@ -846,6 +853,63 @@ if ConfirmedMeleeFlash then
             spawnCriticalHitEffect(hitModel)
         end
     end))
+end
+
+-- ========================================================================
+-- 👻 FAKE LAG GHOST (SERVER REPLICATION CHAMS)
+-- ========================================================================
+local fakeLagGhostFolder = nil
+
+local function cleanupFakeLagGhost()
+    if fakeLagGhostFolder then
+        pcall(function() fakeLagGhostFolder:Destroy() end)
+        fakeLagGhostFolder = nil
+    end
+end
+
+local function updateFakeLagGhost(targetCF, char)
+    if not CFG.fakeLagGhost or not CFG.fakeLagEnabled then
+        cleanupFakeLagGhost()
+        return
+    end
+    if not char or not targetCF then return end
+
+    local myRoot = char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    if not fakeLagGhostFolder or not fakeLagGhostFolder.Parent then
+        fakeLagGhostFolder = Instance.new("Folder")
+        fakeLagGhostFolder.Name = "MidHub_LagGhost"
+        fakeLagGhostFolder.Parent = workspace
+    end
+
+    local existingParts = fakeLagGhostFolder:GetChildren()
+    if #existingParts == 0 then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                local ghostPart = Instance.new("Part")
+                ghostPart.Name = part.Name
+                ghostPart.Size = part.Size
+                ghostPart.Anchored = true
+                ghostPart.CanCollide = false
+                ghostPart.CanTouch = false
+                ghostPart.CanQuery = false
+                ghostPart.CastShadow = false
+                ghostPart.Material = Enum.Material.SmoothPlastic
+                ghostPart.Color = Color3.fromRGB(168, 85, 247)
+                ghostPart.Transparency = 0.55
+                ghostPart.Parent = fakeLagGhostFolder
+            end
+        end
+    end
+
+    for _, ghostPart in ipairs(fakeLagGhostFolder:GetChildren()) do
+        local origPart = char:FindFirstChild(ghostPart.Name)
+        if origPart and origPart:IsA("BasePart") then
+            local relOffset = myRoot.CFrame:ToObjectSpace(origPart.CFrame)
+            ghostPart.CFrame = targetCF * relOffset
+        end
+    end
 end
 
 local function getChar()
@@ -2127,6 +2191,16 @@ local ModKillAura     = registerBindableModule("KillAura",     "Kill Aura",     
 end)
 local ModCriticals    = registerBindableModule("Criticals",    "Critical Hits",    "criticalsEnabled", Enum.KeyCode.Unknown, nil)
 local ModSpinbot      = registerBindableModule("Spinbot",      "Spinbot / Yaw",    "yawEnabled",      Enum.KeyCode.Unknown, nil)
+local ModFakeLag      = registerBindableModule("FakeLag",      "Fake Lag",         "fakeLagEnabled",  Enum.KeyCode.Unknown, function(v)
+    if not v then
+        cleanupFakeLagGhost()
+        local c = getChar()
+        local root = getRoot(c)
+        if root then
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+        end
+    end
+end)
 local ModTargetStrafe = registerBindableModule("TargetStrafe", "Target Strafe",    "targetStrafe",    Enum.KeyCode.Unknown, nil)
 local ModAutoTrap     = registerBindableModule("AutoTrap",     "Auto Trap Enemy",  "autoTrap",        Enum.KeyCode.Unknown, nil)
 local ModScaffold     = registerBindableModule("Scaffold",     "Scaffold Bridge",  "scaffoldEnabled", Enum.KeyCode.Unknown, nil)
@@ -2766,6 +2840,51 @@ YawSec:Toggle({
 })
 
 bindMacToggle(YawSec, ModThirdPerson)
+
+YawSec:Header({ Name = "Fake Lag & Desync (HvH)" })
+bindMacToggle(YawSec, ModFakeLag)
+
+YawSec:Dropdown({
+    Name = "Fake Lag Mode",
+    Multi = false,
+    Required = true,
+    Options = { "Jitter (Randomized Choke)", "Static (Fixed Choke)", "Adaptive (Moving Only)" },
+    Default = "Jitter (Randomized Choke)",
+    Callback = function(v)
+        if v and v:find("Static") then
+            CFG.fakeLagMode = "Static"
+        elseif v and v:find("Adaptive") then
+            CFG.fakeLagMode = "Adaptive"
+        else
+            CFG.fakeLagMode = "Jitter"
+        end
+    end
+})
+
+YawSec:Slider({
+    Name = "Choke Limit (Ticks)",
+    Default = 5,
+    Minimum = 2,
+    Maximum = 10,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(v) CFG.fakeLagChokeTicks = math.clamp(v, 2, 10) end
+})
+
+YawSec:Toggle({
+    Name = "Anti-Cheat Distance Guard (Max 2.8 Studs)",
+    Default = true,
+    Callback = function(v) CFG.fakeLagAcGuard = v end
+})
+
+YawSec:Toggle({
+    Name = "Visual Lag Ghost (Server Position)",
+    Default = true,
+    Callback = function(v)
+        CFG.fakeLagGhost = v
+        if not v then cleanupFakeLagGhost() end
+    end
+})
 
 -- ========================================================================
 -- 🧱 TAB 2: AUTO TRAP & SCAFFOLD
@@ -4090,6 +4209,94 @@ trackConn(RunService.RenderStepped:Connect(function()
     end
 end))
 
+-- ========================================================================
+-- 👻 FAKE LAG / REPLICATION CHOKING LOOP (HvH DESYNC)
+-- ========================================================================
+local fakeLagCounter     = 0
+local fakeLagTargetChoke = 5
+local fakeLagLastSentCF  = nil
+local fakeLagLastSentPos = nil
+local fakeLagIsChoking   = false
+
+trackConn(RunService.Heartbeat:Connect(function()
+    if not CFG.fakeLagEnabled then
+        if fakeLagIsChoking then
+            fakeLagIsChoking = false
+            fakeLagCounter = 0
+            local c = getChar()
+            local root = getRoot(c)
+            if root then
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+            end
+        end
+        cleanupFakeLagGhost()
+        return
+    end
+
+    local c = getChar()
+    local root = getRoot(c)
+    local hum = getHum(c)
+    if not c or not root or not hum or hum.Health <= 0 then
+        if fakeLagIsChoking then
+            fakeLagIsChoking = false
+            fakeLagCounter = 0
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+        end
+        cleanupFakeLagGhost()
+        return
+    end
+
+    local isMoving = (hum.MoveDirection.Magnitude > 0.05 or root.AssemblyLinearVelocity.Magnitude > 1.0)
+    if CFG.fakeLagMode == "Adaptive" and not isMoving then
+        if fakeLagIsChoking then
+            fakeLagIsChoking = false
+            fakeLagCounter = 0
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+            fakeLagLastSentCF = root.CFrame
+            fakeLagLastSentPos = root.Position
+            updateFakeLagGhost(fakeLagLastSentCF, c)
+        end
+        return
+    end
+
+    local curPos = root.Position
+    local distFromSent = fakeLagLastSentPos and (curPos - fakeLagLastSentPos).Magnitude or 0
+    local acLimit = 2.8 -- Safe threshold below server AC teleport kick
+
+    if fakeLagIsChoking then
+        fakeLagCounter = fakeLagCounter + 1
+        local shouldRelease = (fakeLagCounter >= fakeLagTargetChoke)
+        if CFG.fakeLagAcGuard and distFromSent >= acLimit then
+            shouldRelease = true
+        end
+
+        if shouldRelease then
+            fakeLagIsChoking = false
+            fakeLagCounter = 0
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+            fakeLagLastSentCF = root.CFrame
+            fakeLagLastSentPos = root.Position
+            updateFakeLagGhost(fakeLagLastSentCF, c)
+        else
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
+        end
+    else
+        fakeLagIsChoking = true
+        fakeLagCounter = 0
+        if CFG.fakeLagMode == "Jitter" then
+            local minChoke = math.max(2, math.floor(CFG.fakeLagChokeTicks * 0.5))
+            local maxChoke = math.min(10, math.ceil(CFG.fakeLagChokeTicks * 1.4))
+            fakeLagTargetChoke = math.random(minChoke, maxChoke)
+        else
+            fakeLagTargetChoke = CFG.fakeLagChokeTicks
+        end
+        fakeLagLastSentCF = root.CFrame
+        fakeLagLastSentPos = root.Position
+        updateFakeLagGhost(fakeLagLastSentCF, c)
+        pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
+    end
+end))
+
 -- Silent Aim Hook for manual clicks (ViewportPointToRay in performAttack)
 if type(STATE) == "table" and type(STATE.namecallHook) == "function" then
     pcall(function()
@@ -4157,6 +4364,14 @@ ENV.__MIDHUB_MCHVH_CLEANUP = function()
         cleanupPlayerEsp(plr)
     end
     table.clear(espRegistry)
+    cleanupFakeLagGhost()
+    pcall(function()
+        local c = lp.Character
+        local root = c and c:FindFirstChild("HumanoidRootPart")
+        if root then
+            sethiddenproperty(root, "NetworkIsSleeping", false)
+        end
+    end)
     if rainEmitter then pcall(function() rainEmitter:Destroy() end) end
     if rainAttachment then pcall(function() rainAttachment:Destroy() end) end
     if rainSound then pcall(function() rainSound:Stop() rainSound:Destroy() end) end
