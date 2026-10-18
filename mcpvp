@@ -1698,6 +1698,12 @@ trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     local pressedKey = input.KeyCode
     if pressedKey == Enum.KeyCode.Unknown then return end
 
+    if pressedKey == Enum.KeyCode.A then
+        CFG.strafeDirection = -1
+    elseif pressedKey == Enum.KeyCode.D then
+        CFG.strafeDirection = 1
+    end
+
     for _, mod in ipairs(MODULE_ORDER) do
         if mod.key ~= Enum.KeyCode.Unknown and mod.key == pressedKey then
             mod:SetState(not CFG[mod.cfgKey], false)
@@ -2846,32 +2852,55 @@ trackConn(RunService.PostSimulation:Connect(function(dt)
             end
         end
 
-        local auraTarget = CFG.killAura and getClosestEnemy(CFG.auraReach + 3) or nil
-        if CFG.targetStrafe and auraTarget then
-            local tRoot = auraTarget:FindFirstChild("HumanoidRootPart")
+        local function getStrafeTarget()
+            if activeAuraTarget and activeAuraTarget:FindFirstChild("HumanoidRootPart") then
+                return activeAuraTarget
+            end
+            local closestPlr = nil
+            local closestDist = math.max(CFG.strafeRadius + 28, 45)
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= lp and plr.Character then
+                    local r = plr.Character:FindFirstChild("HumanoidRootPart")
+                    local h = plr.Character:FindFirstChildOfClass("Humanoid")
+                    if r and h and h.Health > 0 then
+                        local d = (r.Position - root.Position).Magnitude
+                        if d < closestDist then
+                            closestDist = d
+                            closestPlr = plr.Character
+                        end
+                    end
+                end
+            end
+            return closestPlr
+        end
+
+        local strafeTarget = CFG.targetStrafe and getStrafeTarget() or nil
+        if CFG.targetStrafe and strafeTarget then
+            local tRoot = strafeTarget:FindFirstChild("HumanoidRootPart")
             if tRoot then
                 local effectiveRadius = math.max(2.5, CFG.strafeRadius)
-                local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14, 19.8) or CFG.strafeSpeed
-                strafeAngle = strafeAngle + (effectiveSpeed / effectiveRadius) * dt
-                local offset = Vector3.new(math.cos(strafeAngle) * effectiveRadius, 0, math.sin(strafeAngle) * effectiveRadius)
-                local goalPos = Vector3.new(tRoot.Position.X + offset.X, root.Position.Y, tRoot.Position.Z + offset.Z)
-                local toGoal = (goalPos - root.Position)
-                if toGoal.Magnitude > 0.15 then
-                    local moveDir = toGoal.Unit
-                    hum:Move(moveDir, false) -- Legitimate humanoid movement input (Bypasses AC checks)
-                    if CFG.speedEnabled or not CFG.acSafeSpeed then
-                        local cap = CFG.acSafeSpeed and 19.8 or effectiveSpeed
-                        local curY = root.AssemblyLinearVelocity.Y
-                        root.AssemblyLinearVelocity = Vector3.new(moveDir.X * cap, curY, moveDir.Z * cap)
-                    end
+                local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14, 20.0) or CFG.strafeSpeed
+                
+                local curAngle = math.atan2(root.Position.Z - tRoot.Position.Z, root.Position.X - tRoot.Position.X)
+                local strafeDir = CFG.strafeDirection or 1
+                strafeAngle = curAngle + (strafeDir * (effectiveSpeed / effectiveRadius) * dt)
+
+                local goalX = tRoot.Position.X + math.cos(strafeAngle) * effectiveRadius
+                local goalZ = tRoot.Position.Z + math.sin(strafeAngle) * effectiveRadius
+                local toGoal = Vector3.new(goalX - root.Position.X, 0, goalZ - root.Position.Z)
+
+                if toGoal.Magnitude > 0.05 then
+                    local stepMove = toGoal.Unit * (effectiveSpeed * dt)
+                    root.CFrame = root.CFrame + stepMove
+                    root.CFrame = CFrame.lookAt(root.Position, Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z))
                 end
             end
         elseif CFG.speedEnabled or (CFG.noSlowdown and (c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted"))) then
             local moveDir = hum.MoveDirection
             if moveDir.Magnitude > 0.05 then
                 local spd = CFG.speedEnabled and (CFG.acSafeSpeed and math.min(CFG.speedValue, 20.0) or CFG.speedValue) or 18.5
-                local horiz = Vector3.new(moveDir.X, 0, moveDir.Z).Unit * spd
-                root.AssemblyLinearVelocity = Vector3.new(horiz.X, root.AssemblyLinearVelocity.Y, horiz.Z)
+                local step = Vector3.new(moveDir.X, 0, moveDir.Z).Unit * (spd * dt)
+                root.CFrame = root.CFrame + step
             end
         end
     end
