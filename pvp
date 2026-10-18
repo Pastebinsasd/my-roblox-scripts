@@ -2183,15 +2183,16 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
 end
 
 -- Register all main HvH modules into the Keybinds HUD (Unbound / "None" by default; click any key pill on HUD to bind)
-local ModKillAura     = registerBindableModule("KillAura",     "Kill Aura",        "killAura",        Enum.KeyCode.Unknown, function(v)
+local MODS = {}
+MODS.KillAura     = registerBindableModule("KillAura",     "Kill Aura",        "killAura",        Enum.KeyCode.Unknown, function(v)
     if not v then
         targetHighlight.Enabled = false
         targetHighlight.Adornee = nil
     end
 end)
-local ModCriticals    = registerBindableModule("Criticals",    "Critical Hits",    "criticalsEnabled", Enum.KeyCode.Unknown, nil)
-local ModSpinbot      = registerBindableModule("Spinbot",      "Spinbot / Yaw",    "yawEnabled",      Enum.KeyCode.Unknown, nil)
-local ModFakeLag      = registerBindableModule("FakeLag",      "Fake Lag",         "fakeLagEnabled",  Enum.KeyCode.Unknown, function(v)
+MODS.Criticals    = registerBindableModule("Criticals",    "Critical Hits",    "criticalsEnabled", Enum.KeyCode.Unknown, nil)
+MODS.Spinbot      = registerBindableModule("Spinbot",      "Spinbot / Yaw",    "yawEnabled",      Enum.KeyCode.Unknown, nil)
+MODS.FakeLag      = registerBindableModule("FakeLag",      "Fake Lag",         "fakeLagEnabled",  Enum.KeyCode.Unknown, function(v)
     if not v then
         cleanupFakeLagGhost()
         local c = getChar()
@@ -2201,23 +2202,23 @@ local ModFakeLag      = registerBindableModule("FakeLag",      "Fake Lag",      
         end
     end
 end)
-local ModTargetStrafe = registerBindableModule("TargetStrafe", "Target Strafe",    "targetStrafe",    Enum.KeyCode.Unknown, nil)
-local ModAutoTrap     = registerBindableModule("AutoTrap",     "Auto Trap Enemy",  "autoTrap",        Enum.KeyCode.Unknown, nil)
-local ModScaffold     = registerBindableModule("Scaffold",     "Scaffold Bridge",  "scaffoldEnabled", Enum.KeyCode.Unknown, nil)
-local ModAntiTrap     = registerBindableModule("AntiTrap",     "Anti-Trap Mine",   "autoBreakTrap",   Enum.KeyCode.Unknown, nil)
-local ModVelocity     = registerBindableModule("Velocity",     "0% Velocity KB",   "antiKnockback",   Enum.KeyCode.Unknown, nil)
-local ModSpeed        = registerBindableModule("Speed",        "Speed / Strafe",   "speedEnabled",    Enum.KeyCode.Unknown, nil)
-local ModBhop         = registerBindableModule("Bhop",         "Auto Bhop",        "bhopEnabled",     Enum.KeyCode.Unknown, nil)
-local ModNoJumpDelay  = registerBindableModule("NoJumpDelay",  "No Jump Delay",    "noJumpDelay",     Enum.KeyCode.Unknown, nil)
-local ModFly          = registerBindableModule("Fly",          "3D Flight",        "flyEnabled",      Enum.KeyCode.Unknown, nil)
-local ModAutoGapple   = registerBindableModule("AutoGapple",   "Auto Gapple",      "autoGapple",      Enum.KeyCode.Unknown, nil)
-local ModBowAim       = registerBindableModule("BowAim",       "Silent Bow Aim",   "bowAimbot",       Enum.KeyCode.Unknown, nil)
-local ModThirdPerson  = registerBindableModule("ThirdPerson",  "3rd Person HvH",   "thirdPersonHvH",  Enum.KeyCode.Unknown, setThirdPersonView)
-local ModESP          = registerBindableModule("ESP",          "Player ESP",       "espEnabled",      Enum.KeyCode.Unknown, nil)
-local ModAntiLava     = registerBindableModule("AntiLava",     "Anti Lava",        "antiLava",        Enum.KeyCode.Unknown, function(v)
+MODS.TargetStrafe = registerBindableModule("TargetStrafe", "Target Strafe",    "targetStrafe",    Enum.KeyCode.Unknown, nil)
+MODS.AutoTrap     = registerBindableModule("AutoTrap",     "Auto Trap Enemy",  "autoTrap",        Enum.KeyCode.Unknown, nil)
+MODS.Scaffold     = registerBindableModule("Scaffold",     "Scaffold Bridge",  "scaffoldEnabled", Enum.KeyCode.Unknown, nil)
+MODS.AntiTrap     = registerBindableModule("AntiTrap",     "Anti-Trap Mine",   "autoBreakTrap",   Enum.KeyCode.Unknown, nil)
+MODS.Velocity     = registerBindableModule("Velocity",     "0% Velocity KB",   "antiKnockback",   Enum.KeyCode.Unknown, nil)
+MODS.Speed        = registerBindableModule("Speed",        "Speed / Strafe",   "speedEnabled",    Enum.KeyCode.Unknown, nil)
+MODS.Bhop         = registerBindableModule("Bhop",         "Auto Bhop",        "bhopEnabled",     Enum.KeyCode.Unknown, nil)
+MODS.NoJumpDelay  = registerBindableModule("NoJumpDelay",  "No Jump Delay",    "noJumpDelay",     Enum.KeyCode.Unknown, nil)
+MODS.Fly          = registerBindableModule("Fly",          "3D Flight",        "flyEnabled",      Enum.KeyCode.Unknown, nil)
+MODS.AutoGapple   = registerBindableModule("AutoGapple",   "Auto Gapple",      "autoGapple",      Enum.KeyCode.Unknown, nil)
+MODS.BowAim       = registerBindableModule("BowAim",       "Silent Bow Aim",   "bowAimbot",       Enum.KeyCode.Unknown, nil)
+MODS.ThirdPerson  = registerBindableModule("ThirdPerson",  "3rd Person HvH",   "thirdPersonHvH",  Enum.KeyCode.Unknown, setThirdPersonView)
+MODS.ESP          = registerBindableModule("ESP",          "Player ESP",       "espEnabled",      Enum.KeyCode.Unknown, nil)
+MODS.AntiLava     = registerBindableModule("AntiLava",     "Anti Lava",        "antiLava",        Enum.KeyCode.Unknown, function(v)
     updateAntiLavaState()
 end)
-local ModAntiVoid     = registerBindableModule("AntiVoid",     "Anti Void",        "antiVoid",        Enum.KeyCode.Unknown, nil)
+MODS.AntiVoid     = registerBindableModule("AntiVoid",     "Anti Void",        "antiVoid",        Enum.KeyCode.Unknown, nil)
 
 updateHudHeight(false)
 
@@ -2669,13 +2670,15 @@ Window = MacLib:Window({
 
 local TabGroup = Window:TabGroup()
 
-local RageTab     = TabGroup:Tab({ Name = "Kill Aura & Yaw (HvH)", Image = "rbxassetid://10734975486" })
-local TrapTab     = TabGroup:Tab({ Name = "Auto Trap & Scaffold",  Image = "rbxassetid://10709769841" })
-local MoveTab     = TabGroup:Tab({ Name = "Velocity & Speed",      Image = "rbxassetid://10734920149" })
-local UtilityTab  = TabGroup:Tab({ Name = "Gapple & Bow Aim",      Image = "rbxassetid://10709782497" })
-local VisualsTab  = TabGroup:Tab({ Name = "ESP, Skins & HUD",      Image = "rbxassetid://10723346959" })
-local AmbienceTab = TabGroup:Tab({ Name = "Ambience & Weather",     Image = "rbxassetid://10734934557" })
-local ConfigTab   = TabGroup:Tab({ Name = "Configs & Presets",     Image = "rbxassetid://10734922324" })
+local Tabs = {
+    Rage     = TabGroup:Tab({ Name = "Kill Aura & Yaw (HvH)", Image = "rbxassetid://10734975486" }),
+    Trap     = TabGroup:Tab({ Name = "Auto Trap & Scaffold",  Image = "rbxassetid://10709769841" }),
+    Move     = TabGroup:Tab({ Name = "Velocity & Speed",      Image = "rbxassetid://10734920149" }),
+    Utility  = TabGroup:Tab({ Name = "Gapple & Bow Aim",      Image = "rbxassetid://10709782497" }),
+    Visuals  = TabGroup:Tab({ Name = "ESP, Skins & HUD",      Image = "rbxassetid://10723346959" }),
+    Ambience = TabGroup:Tab({ Name = "Ambience & Weather",     Image = "rbxassetid://10734934557" }),
+    Config   = TabGroup:Tab({ Name = "Configs & Presets",     Image = "rbxassetid://10734922324" }),
+}
 
 local function bindMacToggle(section, mod)
     local t = section:Toggle({
@@ -2692,10 +2695,11 @@ end
 -- ========================================================================
 -- ⚔️ TAB 1: KILL AURA & YAW / SPINBOT (HVH)
 -- ========================================================================
-local AuraSec = RageTab:Section({ Side = "Left" })
-AuraSec:Header({ Name = "Silent Kill Aura (AC-AURA Bypass)" })
+do
+    local AuraSec = Tabs.Rage:Section({ Side = "Left" })
+    AuraSec:Header({ Name = "Silent Kill Aura (AC-AURA Bypass)" })
 
-bindMacToggle(AuraSec, ModKillAura)
+    bindMacToggle(AuraSec, MODS.KillAura)
 
 AuraSec:Slider({
     Name = "Kill Aura Reach (Studs)",
@@ -2744,7 +2748,7 @@ AuraSec:Toggle({
 })
 
 AuraSec:Header({ Name = "Critical Hits (HvH Crits)" })
-bindMacToggle(AuraSec, ModCriticals)
+bindMacToggle(AuraSec, MODS.Criticals)
 
 AuraSec:Dropdown({
     Name = "Criticals Mode",
@@ -2769,7 +2773,7 @@ AuraSec:Toggle({
     Callback = function(v) CFG.critVisualStars = v end
 })
 
-bindMacToggle(AuraSec, ModTargetStrafe)
+bindMacToggle(AuraSec, MODS.TargetStrafe)
 
 AuraSec:Slider({
     Name = "Target Strafe Radius",
@@ -2791,638 +2795,651 @@ AuraSec:Slider({
     Callback = function(v) CFG.strafeSpeed = v end
 })
 
-local YawSec = RageTab:Section({ Side = "Right" })
-YawSec:Header({ Name = "Anti-Aim / Yaw & Spinbot" })
+    local YawSec = Tabs.Rage:Section({ Side = "Right" })
+    YawSec:Header({ Name = "Anti-Aim / Yaw & Spinbot" })
 
-bindMacToggle(YawSec, ModSpinbot)
+    bindMacToggle(YawSec, MODS.Spinbot)
 
-YawSec:Dropdown({
-    Name = "Yaw / Anti-Aim Mode",
-    Multi = false,
-    Required = true,
-    Options = { "Spinbot 360°", "Jitter Desync", "Backwards (180°)", "Face Target", "Static Offset" },
-    Default = 1,
-    Callback = function(v) CFG.yawMode = v end
-})
+    YawSec:Dropdown({
+        Name = "Yaw / Anti-Aim Mode",
+        Multi = false,
+        Required = true,
+        Options = { "Spinbot 360°", "Jitter Desync", "Backwards (180°)", "Face Target", "Static Offset" },
+        Default = 1,
+        Callback = function(v) CFG.yawMode = v end
+    })
 
-YawSec:Slider({
-    Name = "Spinbot Speed (Deg / Sec)",
-    Default = 720,
-    Minimum = 90,
-    Maximum = 2500,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.spinSpeed = v end
-})
+    YawSec:Slider({
+        Name = "Spinbot Speed (Deg / Sec)",
+        Default = 720,
+        Minimum = 90,
+        Maximum = 2500,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.spinSpeed = v end
+    })
 
-YawSec:Slider({
-    Name = "Jitter / Static Yaw Angle (°)",
-    Default = 75,
-    Minimum = 15,
-    Maximum = 180,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v)
-        CFG.jitterAngle = v
-        CFG.staticYawOffset = v
-    end
-})
-
-YawSec:Toggle({
-    Name = "Sneak / Twerk Spam Desync",
-    Default = false,
-    Callback = function(v)
-        CFG.sneakSpam = v
-        if not v and MinecraftSneak then
-            pcall(function() MinecraftSneak:FireServer(false) end)
+    YawSec:Slider({
+        Name = "Jitter / Static Yaw Angle (°)",
+        Default = 75,
+        Minimum = 15,
+        Maximum = 180,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.jitterAngle = v
+            CFG.staticYawOffset = v
         end
-    end
-})
+    })
 
-bindMacToggle(YawSec, ModThirdPerson)
-
-YawSec:Header({ Name = "Fake Lag & Desync (HvH)" })
-bindMacToggle(YawSec, ModFakeLag)
-
-YawSec:Dropdown({
-    Name = "Fake Lag Mode",
-    Multi = false,
-    Required = true,
-    Options = { "Jitter (Randomized Choke)", "Static (Fixed Choke)", "Adaptive (Moving Only)" },
-    Default = "Jitter (Randomized Choke)",
-    Callback = function(v)
-        if v and v:find("Static") then
-            CFG.fakeLagMode = "Static"
-        elseif v and v:find("Adaptive") then
-            CFG.fakeLagMode = "Adaptive"
-        else
-            CFG.fakeLagMode = "Jitter"
+    YawSec:Toggle({
+        Name = "Sneak / Twerk Spam Desync",
+        Default = false,
+        Callback = function(v)
+            CFG.sneakSpam = v
+            if not v and MinecraftSneak then
+                pcall(function() MinecraftSneak:FireServer(false) end)
+            end
         end
-    end
-})
+    })
 
-YawSec:Slider({
-    Name = "Choke Limit (Ticks)",
-    Default = 5,
-    Minimum = 2,
-    Maximum = 10,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.fakeLagChokeTicks = math.clamp(v, 2, 10) end
-})
+    bindMacToggle(YawSec, MODS.ThirdPerson)
 
-YawSec:Toggle({
-    Name = "Anti-Cheat Distance Guard (Max 2.8 Studs)",
-    Default = true,
-    Callback = function(v) CFG.fakeLagAcGuard = v end
-})
+    YawSec:Header({ Name = "Fake Lag & Desync (HvH)" })
+    bindMacToggle(YawSec, MODS.FakeLag)
 
-YawSec:Toggle({
-    Name = "Visual Lag Ghost (Server Position)",
-    Default = true,
-    Callback = function(v)
-        CFG.fakeLagGhost = v
-        if not v then cleanupFakeLagGhost() end
-    end
-})
+    YawSec:Dropdown({
+        Name = "Fake Lag Mode",
+        Multi = false,
+        Required = true,
+        Options = { "Jitter (Randomized Choke)", "Static (Fixed Choke)", "Adaptive (Moving Only)" },
+        Default = "Jitter (Randomized Choke)",
+        Callback = function(v)
+            if v and v:find("Static") then
+                CFG.fakeLagMode = "Static"
+            elseif v and v:find("Adaptive") then
+                CFG.fakeLagMode = "Adaptive"
+            else
+                CFG.fakeLagMode = "Jitter"
+            end
+        end
+    })
+
+    YawSec:Slider({
+        Name = "Choke Limit (Ticks)",
+        Default = 5,
+        Minimum = 2,
+        Maximum = 10,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.fakeLagChokeTicks = math.clamp(v, 2, 10) end
+    })
+
+    YawSec:Toggle({
+        Name = "Anti-Cheat Distance Guard (Max 2.8 Studs)",
+        Default = true,
+        Callback = function(v) CFG.fakeLagAcGuard = v end
+    })
+
+    YawSec:Toggle({
+        Name = "Visual Lag Ghost (Server Position)",
+        Default = true,
+        Callback = function(v)
+            CFG.fakeLagGhost = v
+            if not v then cleanupFakeLagGhost() end
+        end
+    })
+end
 
 -- ========================================================================
 -- 🧱 TAB 2: AUTO TRAP & SCAFFOLD
 -- ========================================================================
-local TrapSec = TrapTab:Section({ Side = "Left" })
-TrapSec:Header({ Name = "Auto Trap / Box Enemy (Cobblestone)" })
+do
+    local TrapSec = Tabs.Trap:Section({ Side = "Left" })
+    TrapSec:Header({ Name = "Auto Trap / Box Enemy (Cobblestone)" })
 
-bindMacToggle(TrapSec, ModAutoTrap)
+    bindMacToggle(TrapSec, MODS.AutoTrap)
 
-TrapSec:Dropdown({
-    Name = "Auto Trap Cage Style",
-    Multi = false,
-    Required = true,
-    Options = { "Full Cage + Roof", "4-Wall Ring", "Head Trap (Roof + Upper)", "Feet Obstruct" },
-    Default = 1,
-    Callback = function(v) CFG.trapMode = v end
-})
+    TrapSec:Dropdown({
+        Name = "Auto Trap Cage Style",
+        Multi = false,
+        Required = true,
+        Options = { "Full Cage + Roof", "4-Wall Ring", "Head Trap (Roof + Upper)", "Feet Obstruct" },
+        Default = 1,
+        Callback = function(v) CFG.trapMode = v end
+    })
 
-TrapSec:Slider({
-    Name = "Auto Trap Range (Studs)",
-    Default = 15,
-    Minimum = 5,
-    Maximum = 20,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.trapRange = v end
-})
+    TrapSec:Slider({
+        Name = "Auto Trap Range (Studs)",
+        Default = 15,
+        Minimum = 5,
+        Maximum = 20,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.trapRange = v end
+    })
 
-TrapSec:Toggle({
-    Name = "Silent Auto-Equip Cobblestone",
-    Default = true,
-    Callback = function(v) CFG.trapSilentSwap = v end
-})
+    TrapSec:Toggle({
+        Name = "Silent Auto-Equip Cobblestone",
+        Default = true,
+        Callback = function(v) CFG.trapSilentSwap = v end
+    })
 
-TrapSec:Button({
-    Name = "Instant Box Nearest Enemy Now",
-    Callback = function()
-        task.spawn(function()
-            local myRoot = getRoot()
-            if myRoot and isInSpawnSafezone(myRoot.Position) then
-                Window:Notify({ Title = "Auto Trap", Description = "Drop into the Arena first! (Spawn Safezone blocks building)", Lifetime = 3 })
-                return
-            end
-            local enemy = getClosestEnemy(CFG.trapRange)
-            if not enemy then
-                Window:Notify({ Title = "Auto Trap", Description = "No enemy within range in the Arena!", Lifetime = 2.5 })
-                return
-            end
-            local eRoot = enemy:FindFirstChild("HumanoidRootPart")
-            if not eRoot then return end
-            local center = getEntityFeetGridCenter(eRoot.Position)
-            local offsets = getTrapOffsets(CFG.trapMode)
-            local placed = 0
-            for _, off in ipairs(offsets) do
-                if placeBlockAtGridPos(center + off) then
-                    placed = placed + 1
-                    task.wait(0.115)
+    TrapSec:Button({
+        Name = "Instant Box Nearest Enemy Now",
+        Callback = function()
+            task.spawn(function()
+                local myRoot = getRoot()
+                if myRoot and isInSpawnSafezone(myRoot.Position) then
+                    Window:Notify({ Title = "Auto Trap", Description = "Drop into the Arena first! (Spawn Safezone blocks building)", Lifetime = 3 })
+                    return
                 end
-            end
-            if toolBeforeTrap then
-                equipToolFast(toolBeforeTrap)
-                toolBeforeTrap = nil
-            end
-            Window:Notify({
-                Title = "Auto Trap",
-                Description = string.format("Placed %d trap blocks around %s!", placed, enemy.Name),
-                Lifetime = 3
-            })
-        end)
-    end
-})
+                local enemy = getClosestEnemy(CFG.trapRange)
+                if not enemy then
+                    Window:Notify({ Title = "Auto Trap", Description = "No enemy within range in the Arena!", Lifetime = 2.5 })
+                    return
+                end
+                local eRoot = enemy:FindFirstChild("HumanoidRootPart")
+                if not eRoot then return end
+                local center = getEntityFeetGridCenter(eRoot.Position)
+                local offsets = getTrapOffsets(CFG.trapMode)
+                local placed = 0
+                for _, off in ipairs(offsets) do
+                    if placeBlockAtGridPos(center + off) then
+                        placed = placed + 1
+                        task.wait(0.115)
+                    end
+                end
+                if toolBeforeTrap then
+                    equipToolFast(toolBeforeTrap)
+                    toolBeforeTrap = nil
+                end
+                Window:Notify({
+                    Title = "Auto Trap",
+                    Description = string.format("Placed %d trap blocks around %s!", placed, enemy.Name),
+                    Lifetime = 3
+                })
+            end)
+        end
+    })
 
-local ScafSec = TrapTab:Section({ Side = "Right" })
-ScafSec:Header({ Name = "Scaffold & Auto Unbox (Anti-Trap)" })
+    local ScafSec = Tabs.Trap:Section({ Side = "Right" })
+    ScafSec:Header({ Name = "Scaffold & Auto Unbox (Anti-Trap)" })
 
-bindMacToggle(ScafSec, ModScaffold)
-bindMacToggle(ScafSec, ModAntiTrap)
+    bindMacToggle(ScafSec, MODS.Scaffold)
+    bindMacToggle(ScafSec, MODS.AntiTrap)
+end
 
 -- ========================================================================
 -- 🚀 TAB 3: VELOCITY & MOVEMENT
 -- ========================================================================
-local VelSec = MoveTab:Section({ Side = "Left" })
-VelSec:Header({ Name = "Velocity (Anti-Knockback) & NoSlow" })
+do
+    local VelSec = Tabs.Move:Section({ Side = "Left" })
+    VelSec:Header({ Name = "Velocity (Anti-Knockback) & NoSlow" })
 
-bindMacToggle(VelSec, ModVelocity)
+    bindMacToggle(VelSec, MODS.Velocity)
 
-VelSec:Slider({
-    Name = "Horizontal Velocity (%)",
-    Default = 0,
-    Minimum = 0,
-    Maximum = 100,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.kbHorizontalPct = v end
-})
+    VelSec:Slider({
+        Name = "Horizontal Velocity (%)",
+        Default = 0,
+        Minimum = 0,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.kbHorizontalPct = v end
+    })
 
-VelSec:Slider({
-    Name = "Vertical Velocity (%)",
-    Default = 0,
-    Minimum = 0,
-    Maximum = 100,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.kbVerticalPct = v end
-})
+    VelSec:Slider({
+        Name = "Vertical Velocity (%)",
+        Default = 0,
+        Minimum = 0,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.kbVerticalPct = v end
+    })
 
-VelSec:Toggle({
-    Name = "NoSlowdown (Eat / Block / Cobweb / SoulSand)",
-    Default = true,
-    Callback = function(v)
-        CFG.noSlowdown = v
-        updateNoSlowPatches()
-    end
-})
-
-bindMacToggle(VelSec, ModAntiLava)
-bindMacToggle(VelSec, ModAntiVoid)
-
-VelSec:Dropdown({
-    Name = "Anti-Void Fall Catch Mode",
-    Multi = false,
-    Required = true,
-    Options = { "Teleport (Recall to Edge)", "Bounce (High Launch Up)" },
-    Default = "Teleport (Recall to Edge)",
-    Callback = function(v)
-        CFG.antiVoidMode = (v and v:find("Bounce")) and "Bounce" or "Teleport"
-    end
-})
-
-VelSec:Toggle({
-    Name = "Always Sprint",
-    Default = true,
-    Callback = function(v)
-        CFG.alwaysSprint = v
-        if SprintRemote then
-            pcall(function() SprintRemote:FireServer(v) end)
+    VelSec:Toggle({
+        Name = "NoSlowdown (Eat / Block / Cobweb / SoulSand)",
+        Default = true,
+        Callback = function(v)
+            CFG.noSlowdown = v
+            updateNoSlowPatches()
         end
-    end
-})
+    })
 
-local SpeedSec = MoveTab:Section({ Side = "Right" })
-SpeedSec:Header({ Name = "Speed, Bhop & Flight" })
+    bindMacToggle(VelSec, MODS.AntiLava)
+    bindMacToggle(VelSec, MODS.AntiVoid)
 
-bindMacToggle(SpeedSec, ModSpeed)
+    VelSec:Dropdown({
+        Name = "Anti-Void Fall Catch Mode",
+        Multi = false,
+        Required = true,
+        Options = { "Teleport (Recall to Edge)", "Bounce (High Launch Up)" },
+        Default = "Teleport (Recall to Edge)",
+        Callback = function(v)
+            CFG.antiVoidMode = (v and v:find("Bounce")) and "Bounce" or "Teleport"
+        end
+    })
 
-SpeedSec:Slider({
-    Name = "Move Speed Value (Safe max: 18.5)",
-    Default = 18.2,
-    Minimum = 14.0,
-    Maximum = 35.0,
-    DisplayMethod = "Value",
-    Precision = 1,
-    Callback = function(v) CFG.speedValue = v end
-})
+    VelSec:Toggle({
+        Name = "Always Sprint",
+        Default = true,
+        Callback = function(v)
+            CFG.alwaysSprint = v
+            if SprintRemote then
+                pcall(function() SprintRemote:FireServer(v) end)
+            end
+        end
+    })
 
-SpeedSec:Toggle({
-    Name = "AC Safe Bypass Speed (Anti-Kick)",
-    Default = true,
-    Callback = function(v) CFG.acSafeSpeed = v end
-})
+    local SpeedSec = Tabs.Move:Section({ Side = "Right" })
+    SpeedSec:Header({ Name = "Speed, Bhop & Flight" })
 
-bindMacToggle(SpeedSec, ModNoJumpDelay)
-bindMacToggle(SpeedSec, ModBhop)
-bindMacToggle(SpeedSec, ModFly)
+    bindMacToggle(SpeedSec, MODS.Speed)
 
-SpeedSec:Slider({
-    Name = "Flight Speed",
-    Default = 55,
-    Minimum = 20,
-    Maximum = 150,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.flySpeed = v end
-})
+    SpeedSec:Slider({
+        Name = "Move Speed Value (Safe max: 18.5)",
+        Default = 18.2,
+        Minimum = 14.0,
+        Maximum = 35.0,
+        DisplayMethod = "Value",
+        Precision = 1,
+        Callback = function(v) CFG.speedValue = v end
+    })
 
-SpeedSec:Toggle({
-    Name = "Noclip",
-    Default = false,
-    Callback = function(v) CFG.noclip = v end
-})
+    SpeedSec:Toggle({
+        Name = "AC Safe Bypass Speed (Anti-Kick)",
+        Default = true,
+        Callback = function(v) CFG.acSafeSpeed = v end
+    })
+
+    bindMacToggle(SpeedSec, MODS.NoJumpDelay)
+    bindMacToggle(SpeedSec, MODS.Bhop)
+    bindMacToggle(SpeedSec, MODS.Fly)
+
+    SpeedSec:Slider({
+        Name = "Flight Speed",
+        Default = 55,
+        Minimum = 20,
+        Maximum = 150,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.flySpeed = v end
+    })
+
+    SpeedSec:Toggle({
+        Name = "Noclip",
+        Default = false,
+        Callback = function(v) CFG.noclip = v end
+    })
+end
 
 -- ========================================================================
 -- 🍎 TAB 4: AUTO GAPPLE & BOW AIMBOT
 -- ========================================================================
-local GapSec = UtilityTab:Section({ Side = "Left" })
-GapSec:Header({ Name = "Auto Golden Apple" })
+do
+    local GapSec = Tabs.Utility:Section({ Side = "Left" })
+    GapSec:Header({ Name = "Auto Golden Apple" })
 
-bindMacToggle(GapSec, ModAutoGapple)
+    bindMacToggle(GapSec, MODS.AutoGapple)
 
-GapSec:Slider({
-    Name = "Golden Apple HP Threshold (Max 20)",
-    Default = 13,
-    Minimum = 4,
-    Maximum = 19,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.gappleHpThreshold = v end
-})
+    GapSec:Slider({
+        Name = "Golden Apple HP Threshold (Max 20)",
+        Default = 13,
+        Minimum = 4,
+        Maximum = 19,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.gappleHpThreshold = v end
+    })
 
-local BowSec = UtilityTab:Section({ Side = "Right" })
-BowSec:Header({ Name = "Silent Bow Aimbot" })
+    local BowSec = Tabs.Utility:Section({ Side = "Right" })
+    BowSec:Header({ Name = "Silent Bow Aimbot" })
 
-bindMacToggle(BowSec, ModBowAim)
+    bindMacToggle(BowSec, MODS.BowAim)
 
-BowSec:Slider({
-    Name = "Bow Aimbot Range",
-    Default = 85,
-    Minimum = 20,
-    Maximum = 160,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v) CFG.bowRange = v end
-})
+    BowSec:Slider({
+        Name = "Bow Aimbot Range",
+        Default = 85,
+        Minimum = 20,
+        Maximum = 160,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.bowRange = v end
+    })
+end
 
 -- ========================================================================
 -- ✨ TAB 5: ESP, COSMETICS & KEYBINDS HUD SETTINGS
 -- ========================================================================
-local EspSec = VisualsTab:Section({ Side = "Left" })
-EspSec:Header({ Name = "Keybinds HUD & Notifications" })
+do
+    local EspSec = Tabs.Visuals:Section({ Side = "Left" })
+    EspSec:Header({ Name = "Keybinds HUD & Notifications" })
 
-EspSec:Toggle({
-    Name = "Show On-Screen Keybinds HUD",
-    Default = true,
-    Callback = function(v)
-        CFG.showKeybindHud = v
-        keybindsFrame.Visible = v
-    end
-})
+    EspSec:Toggle({
+        Name = "Show On-Screen Keybinds HUD",
+        Default = true,
+        Callback = function(v)
+            CFG.showKeybindHud = v
+            keybindsFrame.Visible = v
+        end
+    })
 
-EspSec:Toggle({
-    Name = "Show Toggle ON/OFF Notifications",
-    Default = true,
-    Callback = function(v) CFG.toggleNotifs = v end
-})
+    EspSec:Toggle({
+        Name = "Show Toggle ON/OFF Notifications",
+        Default = true,
+        Callback = function(v) CFG.toggleNotifs = v end
+    })
 
-EspSec:Toggle({
-    Name = "Play Sound On Module Toggle",
-    Default = true,
-    Callback = function(v) CFG.notifSound = v end
-})
+    EspSec:Toggle({
+        Name = "Play Sound On Module Toggle",
+        Default = true,
+        Callback = function(v) CFG.notifSound = v end
+    })
 
-EspSec:Header({ Name = "HvH 2D Box ESP" })
-bindMacToggle(EspSec, ModESP)
+    EspSec:Header({ Name = "HvH 2D Box ESP" })
+    bindMacToggle(EspSec, MODS.ESP)
 
-EspSec:Toggle({
-    Name = "2D Bounding Box",
-    Default = true,
-    Callback = function(v) CFG.espBox2D = v end
-})
+    EspSec:Toggle({
+        Name = "2D Bounding Box",
+        Default = true,
+        Callback = function(v) CFG.espBox2D = v end
+    })
 
-EspSec:Toggle({
-    Name = "2D Health Bar (Gradient)",
-    Default = true,
-    Callback = function(v) CFG.espHealthBar = v end
-})
+    EspSec:Toggle({
+        Name = "2D Health Bar (Gradient)",
+        Default = true,
+        Callback = function(v) CFG.espHealthBar = v end
+    })
 
-EspSec:Toggle({
-    Name = "Player Name Label",
-    Default = true,
-    Callback = function(v) CFG.espName = v end
-})
+    EspSec:Toggle({
+        Name = "Player Name Label",
+        Default = true,
+        Callback = function(v) CFG.espName = v end
+    })
 
-EspSec:Toggle({
-    Name = "Distance & Hearts Tag",
-    Default = true,
-    Callback = function(v) CFG.espDistance = v end
-})
+    EspSec:Toggle({
+        Name = "Distance & Hearts Tag",
+        Default = true,
+        Callback = function(v) CFG.espDistance = v end
+    })
 
-EspSec:Toggle({
-    Name = "Weapon / Item Held Tag",
-    Default = true,
-    Callback = function(v) CFG.espWeapon = v end
-})
+    EspSec:Toggle({
+        Name = "Weapon / Item Held Tag",
+        Default = true,
+        Callback = function(v) CFG.espWeapon = v end
+    })
 
-local CosSec = VisualsTab:Section({ Side = "Right" })
-CosSec:Header({ Name = "Client Cosmetics Unlocker" })
+    local CosSec = Tabs.Visuals:Section({ Side = "Right" })
+    CosSec:Header({ Name = "Client Cosmetics Unlocker" })
 
-local swordSkinIds = { "default" }
-local auraIds      = { "default" }
-local mcSkinIds    = { "default" }
+    local swordSkinIds = { "default" }
+    local auraIds      = { "default" }
+    local mcSkinIds    = { "default" }
 
-if CosmeticsCatalog and CosmeticsCatalog.Items then
-    if type(CosmeticsCatalog.Items.Swords) == "table" then
-        for _, item in ipairs(CosmeticsCatalog.Items.Swords) do
-            if item.id and item.id ~= "default" then
-                table.insert(swordSkinIds, item.id)
+    if CosmeticsCatalog and CosmeticsCatalog.Items then
+        if type(CosmeticsCatalog.Items.Swords) == "table" then
+            for _, item in ipairs(CosmeticsCatalog.Items.Swords) do
+                if item.id and item.id ~= "default" then
+                    table.insert(swordSkinIds, item.id)
+                end
+            end
+        end
+        if type(CosmeticsCatalog.Items.Auras) == "table" then
+            for _, item in ipairs(CosmeticsCatalog.Items.Auras) do
+                if item.id and item.id ~= "default" then
+                    table.insert(auraIds, item.id)
+                end
+            end
+        end
+        if type(CosmeticsCatalog.Items.Skins) == "table" then
+            for _, item in ipairs(CosmeticsCatalog.Items.Skins) do
+                if item.id and item.id ~= "default" then
+                    table.insert(mcSkinIds, item.id)
+                end
             end
         end
     end
-    if type(CosmeticsCatalog.Items.Auras) == "table" then
-        for _, item in ipairs(CosmeticsCatalog.Items.Auras) do
-            if item.id and item.id ~= "default" then
-                table.insert(auraIds, item.id)
-            end
+
+    local origCanEquip = CosmeticsCatalog and CosmeticsCatalog.CanEquip
+    if CosmeticsCatalog then
+        CosmeticsCatalog.CanEquip = function()
+            return true
         end
     end
-    if type(CosmeticsCatalog.Items.Skins) == "table" then
-        for _, item in ipairs(CosmeticsCatalog.Items.Skins) do
-            if item.id and item.id ~= "default" then
-                table.insert(mcSkinIds, item.id)
-            end
+
+    CosSec:Dropdown({
+        Name = "Sword Skin Override",
+        Multi = false,
+        Required = true,
+        Options = swordSkinIds,
+        Default = 1,
+        Callback = function(v)
+            CFG.selectedSwordSkin = v
+            pcall(function() lp:SetAttribute("CosmeticSword", v) end)
         end
-    end
+    })
+
+    CosSec:Dropdown({
+        Name = "Minecraft Character Skin",
+        Multi = false,
+        Required = true,
+        Options = mcSkinIds,
+        Default = 1,
+        Callback = function(v)
+            CFG.selectedMcSkin = v
+            pcall(function() lp:SetAttribute("CosmeticSkin", v) end)
+        end
+    })
+
+    CosSec:Dropdown({
+        Name = "Particle Aura Override",
+        Multi = false,
+        Required = true,
+        Options = auraIds,
+        Default = 1,
+        Callback = function(v)
+            CFG.selectedAura = v
+            pcall(function() lp:SetAttribute("CosmeticAura", v) end)
+        end
+    })
 end
-
-local origCanEquip = CosmeticsCatalog and CosmeticsCatalog.CanEquip
-if CosmeticsCatalog then
-    CosmeticsCatalog.CanEquip = function()
-        return true
-    end
-end
-
-CosSec:Dropdown({
-    Name = "Sword Skin Override",
-    Multi = false,
-    Required = true,
-    Options = swordSkinIds,
-    Default = 1,
-    Callback = function(v)
-        CFG.selectedSwordSkin = v
-        pcall(function() lp:SetAttribute("CosmeticSword", v) end)
-    end
-})
-
-CosSec:Dropdown({
-    Name = "Minecraft Character Skin",
-    Multi = false,
-    Required = true,
-    Options = mcSkinIds,
-    Default = 1,
-    Callback = function(v)
-        CFG.selectedMcSkin = v
-        pcall(function() lp:SetAttribute("CosmeticSkin", v) end)
-    end
-})
-
-CosSec:Dropdown({
-    Name = "Particle Aura Override",
-    Multi = false,
-    Required = true,
-    Options = auraIds,
-    Default = 1,
-    Callback = function(v)
-        CFG.selectedAura = v
-        pcall(function() lp:SetAttribute("CosmeticAura", v) end)
-    end
-})
 
 -- ========================================================================
 
 -- ========================================================================
 -- 🌌 TAB 6: AMBIENCE & WEATHER UI
 -- ========================================================================
-local SkySec = AmbienceTab:Section({ Side = "Left" })
-SkySec:Header({ Name = "Custom Skybox & Time of Day" })
+do
+    local SkySec = Tabs.Ambience:Section({ Side = "Left" })
+    SkySec:Header({ Name = "Custom Skybox & Time of Day" })
 
-SkySec:Toggle({
-    Name = "Enable Custom Skybox",
-    Default = false,
-    Callback = function(v)
-        CFG.customSkyEnabled = v
-        applySkyPreset(v and CFG.selectedSky or "Default")
-    end
-})
+    SkySec:Toggle({
+        Name = "Enable Custom Skybox",
+        Default = false,
+        Callback = function(v)
+            CFG.customSkyEnabled = v
+            applySkyPreset(v and CFG.selectedSky or "Default")
+        end
+    })
 
-SkySec:Dropdown({
-    Name = "Skybox Theme",
-    Multi = false,
-    Required = true,
-    Options = { "Default (Minecraft)", "Purple Nebula", "Blood Moon", "Vaporwave Sunset", "Cyberpunk Stars" },
-    Default = 2,
-    Callback = function(v)
-        CFG.selectedSky = v
-        if CFG.customSkyEnabled then applySkyPreset(v) end
-    end
-})
+    SkySec:Dropdown({
+        Name = "Skybox Theme",
+        Multi = false,
+        Required = true,
+        Options = { "Default (Minecraft)", "Purple Nebula", "Blood Moon", "Vaporwave Sunset", "Cyberpunk Stars" },
+        Default = 2,
+        Callback = function(v)
+            CFG.selectedSky = v
+            if CFG.customSkyEnabled then applySkyPreset(v) end
+        end
+    })
 
-SkySec:Toggle({
-    Name = "Custom Time of Day",
-    Default = false,
-    Callback = function(v)
-        CFG.timeOfDayEnabled = v
-        updateAtmosphere()
-    end
-})
+    SkySec:Toggle({
+        Name = "Custom Time of Day",
+        Default = false,
+        Callback = function(v)
+            CFG.timeOfDayEnabled = v
+            updateAtmosphere()
+        end
+    })
 
-SkySec:Slider({
-    Name = "Time of Day (Hours)",
-    Default = 18.5,
-    Minimum = 0,
-    Maximum = 24,
-    DisplayMethod = "Value",
-    Precision = 1,
-    Callback = function(v)
-        CFG.timeOfDayHour = v
-        if CFG.timeOfDayEnabled then updateAtmosphere() end
-    end
-})
+    SkySec:Slider({
+        Name = "Time of Day (Hours)",
+        Default = 18.5,
+        Minimum = 0,
+        Maximum = 24,
+        DisplayMethod = "Value",
+        Precision = 1,
+        Callback = function(v)
+            CFG.timeOfDayHour = v
+            if CFG.timeOfDayEnabled then updateAtmosphere() end
+        end
+    })
 
-local WeatherSec = AmbienceTab:Section({ Side = "Right" })
-WeatherSec:Header({ Name = "Rain & Atmospheric Effects" })
+    local WeatherSec = Tabs.Ambience:Section({ Side = "Right" })
+    WeatherSec:Header({ Name = "Rain & Atmospheric Effects" })
 
-WeatherSec:Toggle({
-    Name = "Aesthetic Rain Effect",
-    Default = false,
-    Callback = function(v)
-        CFG.rainEnabled = v
-        updateRainState()
-    end
-})
+    WeatherSec:Toggle({
+        Name = "Aesthetic Rain Effect",
+        Default = false,
+        Callback = function(v)
+            CFG.rainEnabled = v
+            updateRainState()
+        end
+    })
 
-WeatherSec:Slider({
-    Name = "Rain Particle Density",
-    Default = 160,
-    Minimum = 50,
-    Maximum = 350,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v)
-        CFG.rainDensity = v
-        if CFG.rainEnabled then updateRainState() end
-    end
-})
+    WeatherSec:Slider({
+        Name = "Rain Particle Density",
+        Default = 160,
+        Minimum = 50,
+        Maximum = 350,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.rainDensity = v
+            if CFG.rainEnabled then updateRainState() end
+        end
+    })
 
-WeatherSec:Toggle({
-    Name = "Ambient Rain Audio Loop",
-    Default = false,
-    Callback = function(v)
-        CFG.rainSoundEnabled = v
-        updateRainState()
-    end
-})
+    WeatherSec:Toggle({
+        Name = "Ambient Rain Audio Loop",
+        Default = false,
+        Callback = function(v)
+            CFG.rainSoundEnabled = v
+            updateRainState()
+        end
+    })
 
-WeatherSec:Slider({
-    Name = "Rain Audio Volume (%)",
-    Default = 25,
-    Minimum = 5,
-    Maximum = 100,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(v)
-        CFG.rainSoundVolume = v
-        if CFG.rainEnabled and CFG.rainSoundEnabled then updateRainState() end
-    end
-})
+    WeatherSec:Slider({
+        Name = "Rain Audio Volume (%)",
+        Default = 25,
+        Minimum = 5,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.rainSoundVolume = v
+            if CFG.rainEnabled and CFG.rainSoundEnabled then updateRainState() end
+        end
+    })
 
-WeatherSec:Toggle({
-    Name = "ColorCorrection & Saturation Boost",
-    Default = false,
-    Callback = function(v)
-        CFG.colorCorrection = v
-        updateAtmosphere()
-    end
-})
+    WeatherSec:Toggle({
+        Name = "ColorCorrection & Saturation Boost",
+        Default = false,
+        Callback = function(v)
+            CFG.colorCorrection = v
+            updateAtmosphere()
+        end
+    })
 
-WeatherSec:Slider({
-    Name = "Saturation Boost",
-    Default = 0.4,
-    Minimum = 0,
-    Maximum = 1.5,
-    DisplayMethod = "Value",
-    Precision = 2,
-    Callback = function(v)
-        CFG.saturationBoost = v
-        if CFG.colorCorrection then updateAtmosphere() end
-    end
-})
+    WeatherSec:Slider({
+        Name = "Saturation Boost",
+        Default = 0.4,
+        Minimum = 0,
+        Maximum = 1.5,
+        DisplayMethod = "Value",
+        Precision = 2,
+        Callback = function(v)
+            CFG.saturationBoost = v
+            if CFG.colorCorrection then updateAtmosphere() end
+        end
+    })
+end
 
 -- ========================================================================
 -- 💾 TAB 7: CONFIGS & PRESETS UI
 -- ========================================================================
-local PresetSec = ConfigTab:Section({ Side = "Left" })
-PresetSec:Header({ Name = "Quick Combat Presets" })
+do
+    local PresetSec = Tabs.Config:Section({ Side = "Left" })
+    PresetSec:Header({ Name = "Quick Combat Presets" })
 
-PresetSec:Button({
-    Name = "⚡ Load Default HvH Preset",
-    Callback = function()
-        applyConfig(PRESETS.HvH)
-        Window:Notify({ Title = "Config Presets", Description = "Loaded 'Default HvH' preset!", Lifetime = 3 })
-    end
-})
+    PresetSec:Button({
+        Name = "⚡ Load Default HvH Preset",
+        Callback = function()
+            applyConfig(PRESETS.HvH)
+            Window:Notify({ Title = "Config Presets", Description = "Loaded 'Default HvH' preset!", Lifetime = 3 })
+        end
+    })
 
-PresetSec:Button({
-    Name = "🛡️ Load Legit / Closet Preset",
-    Callback = function()
-        applyConfig(PRESETS.Legit)
-        Window:Notify({ Title = "Config Presets", Description = "Loaded 'Legit / Closet' preset!", Lifetime = 3 })
-    end
-})
+    PresetSec:Button({
+        Name = "🛡️ Load Legit / Closet Preset",
+        Callback = function()
+            applyConfig(PRESETS.Legit)
+            Window:Notify({ Title = "Config Presets", Description = "Loaded 'Legit / Closet' preset!", Lifetime = 3 })
+        end
+    })
 
-PresetSec:Button({
-    Name = "☠️ Load Blatant / Rage Preset",
-    Callback = function()
-        applyConfig(PRESETS.Blatant)
-        Window:Notify({ Title = "Config Presets", Description = "Loaded 'Blatant / Rage' preset!", Lifetime = 3 })
-    end
-})
+    PresetSec:Button({
+        Name = "☠️ Load Blatant / Rage Preset",
+        Callback = function()
+            applyConfig(PRESETS.Blatant)
+            Window:Notify({ Title = "Config Presets", Description = "Loaded 'Blatant / Rage' preset!", Lifetime = 3 })
+        end
+    })
 
-local FileSec = ConfigTab:Section({ Side = "Right" })
-FileSec:Header({ Name = "Custom Config File Management" })
+    local FileSec = Tabs.Config:Section({ Side = "Right" })
+    FileSec:Header({ Name = "Custom Config File Management" })
 
-local configInputName = "default"
-FileSec:Input({
-    Name = "Config File Name",
-    Placeholder = "e.g. duels_hvh",
-    Default = "default",
-    Callback = function(v)
-        if v and #v > 0 then configInputName = v end
-    end
-})
+    local configInputName = "default"
+    FileSec:Input({
+        Name = "Config File Name",
+        Placeholder = "e.g. duels_hvh",
+        Default = "default",
+        Callback = function(v)
+            if v and #v > 0 then configInputName = v end
+        end
+    })
 
-FileSec:Button({
-    Name = "💾 Save Current Config",
-    Callback = function()
-        local fname = saveConfigFile(configInputName)
-        Window:Notify({ Title = "Config Saved", Description = "Saved settings to " .. fname, Lifetime = 3.5 })
-    end
-})
+    FileSec:Button({
+        Name = "💾 Save Current Config",
+        Callback = function()
+            local fname = saveConfigFile(configInputName)
+            Window:Notify({ Title = "Config Saved", Description = "Saved settings to " .. fname, Lifetime = 3.5 })
+        end
+    })
 
-FileSec:Button({
-    Name = "📂 Load Selected Config",
-    Callback = function()
-        local ok, msg = loadConfigFile(configInputName)
-        Window:Notify({
-            Title = ok and "Config Loaded" or "Load Failed",
-            Description = msg,
-            Lifetime = 3.5
-        })
-    end
-})
+    FileSec:Button({
+        Name = "📂 Load Selected Config",
+        Callback = function()
+            local ok, msg = loadConfigFile(configInputName)
+            Window:Notify({
+                Title = ok and "Config Loaded" or "Load Failed",
+                Description = msg,
+                Lifetime = 3.5
+            })
+        end
+    })
 
-FileSec:Button({
-    Name = "🔄 Reset All to Defaults",
-    Callback = function()
-        applyConfig(PRESETS.HvH)
-        Window:Notify({ Title = "Reset Settings", Description = "Reset all features to clean defaults.", Lifetime = 3 })
-    end
-})
+    FileSec:Button({
+        Name = "🔄 Reset All to Defaults",
+        Callback = function()
+            applyConfig(PRESETS.HvH)
+            Window:Notify({ Title = "Reset Settings", Description = "Reset all features to clean defaults.", Lifetime = 3 })
+        end
+    })
+end
 
 -- 📡 2D ESP OVERLAY
 -- ========================================================================
@@ -3466,14 +3483,13 @@ end
 -- 🔄 HVH LOOPS (YAW/SPINBOT, TARGET STRAFE, SPEED, KILL AURA, AUTO TRAP)
 -- ========================================================================
 
-local spinAngle = 0
-local jitterFlip = false
-local strafeAngle = 0
-local attackSeq = 1000
-local hitSwitchToggle = false
-local lastStrafeTarget = nil
+do
+    local spinAngle = 0
+    local jitterFlip = false
+    local strafeAngle = 0
+    local lastStrafeTarget = nil
 
-trackConn(RunService.RenderStepped:Connect(function(dt)
+    trackConn(RunService.RenderStepped:Connect(function(dt)
     local c = getChar()
     local root = getRoot(c)
     local hum = getHum(c)
@@ -3771,6 +3787,7 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
         end
     end
 end))
+end
 
 -- Helper: Wall / Line-of-Sight check matching MinecraftCombatClient performAttack (lines 390-406)
 local function isLineOfSightClear(eyePos, unitDir, hitDist)
@@ -3800,8 +3817,9 @@ local function isLineOfSightClear(eyePos, unitDir, hitDist)
 end
 
 -- 2. Silent Kill Aura Loop (AC-AURA Safe)
-local lastSprintFireClock = 0
 task.spawn(function()
+    local lastSprintFireClock = 0
+    local hitSwitchToggle = false
     while true do
         local safeCps = math.clamp(CFG.auraCps, 4, 13)
         local baseDelay = 1 / safeCps
@@ -3975,8 +3993,8 @@ task.spawn(function()
 end)
 
 -- 3. Ultra-Fast Burst Auto Trap, Scaffold, Auto Break Trap, Sneak Spam, Auto Gapple & Bow Aimbot Loop
-local sneakToggleState = false
 task.spawn(function()
+    local sneakToggleState = false
     while task.wait(0.025) do
         if not espGui.Parent then break end
         local c = getChar()
@@ -4212,90 +4230,92 @@ end))
 -- ========================================================================
 -- 👻 FAKE LAG / REPLICATION CHOKING LOOP (HvH DESYNC)
 -- ========================================================================
-local fakeLagCounter     = 0
-local fakeLagTargetChoke = 5
-local fakeLagLastSentCF  = nil
-local fakeLagLastSentPos = nil
-local fakeLagIsChoking   = false
+do
+    local fakeLagCounter     = 0
+    local fakeLagTargetChoke = 5
+    local fakeLagLastSentCF  = nil
+    local fakeLagLastSentPos = nil
+    local fakeLagIsChoking   = false
 
-trackConn(RunService.Heartbeat:Connect(function()
-    if not CFG.fakeLagEnabled then
-        if fakeLagIsChoking then
-            fakeLagIsChoking = false
-            fakeLagCounter = 0
-            local c = getChar()
-            local root = getRoot(c)
-            if root then
+    trackConn(RunService.Heartbeat:Connect(function()
+        if not CFG.fakeLagEnabled then
+            if fakeLagIsChoking then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                local c = getChar()
+                local root = getRoot(c)
+                if root then
+                    pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                end
+            end
+            cleanupFakeLagGhost()
+            return
+        end
+
+        local c = getChar()
+        local root = getRoot(c)
+        local hum = getHum(c)
+        if not c or not root or not hum or hum.Health <= 0 then
+            if fakeLagIsChoking then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
                 pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
             end
+            cleanupFakeLagGhost()
+            return
         end
-        cleanupFakeLagGhost()
-        return
-    end
 
-    local c = getChar()
-    local root = getRoot(c)
-    local hum = getHum(c)
-    if not c or not root or not hum or hum.Health <= 0 then
+        local isMoving = (hum.MoveDirection.Magnitude > 0.05 or root.AssemblyLinearVelocity.Magnitude > 1.0)
+        if CFG.fakeLagMode == "Adaptive" and not isMoving then
+            if fakeLagIsChoking then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                fakeLagLastSentCF = root.CFrame
+                fakeLagLastSentPos = root.Position
+                updateFakeLagGhost(fakeLagLastSentCF, c)
+            end
+            return
+        end
+
+        local curPos = root.Position
+        local distFromSent = fakeLagLastSentPos and (curPos - fakeLagLastSentPos).Magnitude or 0
+        local acLimit = 2.8 -- Safe threshold below server AC teleport kick
+
         if fakeLagIsChoking then
-            fakeLagIsChoking = false
-            fakeLagCounter = 0
-            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
-        end
-        cleanupFakeLagGhost()
-        return
-    end
+            fakeLagCounter = fakeLagCounter + 1
+            local shouldRelease = (fakeLagCounter >= fakeLagTargetChoke)
+            if CFG.fakeLagAcGuard and distFromSent >= acLimit then
+                shouldRelease = true
+            end
 
-    local isMoving = (hum.MoveDirection.Magnitude > 0.05 or root.AssemblyLinearVelocity.Magnitude > 1.0)
-    if CFG.fakeLagMode == "Adaptive" and not isMoving then
-        if fakeLagIsChoking then
-            fakeLagIsChoking = false
-            fakeLagCounter = 0
-            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
-            fakeLagLastSentCF = root.CFrame
-            fakeLagLastSentPos = root.Position
-            updateFakeLagGhost(fakeLagLastSentCF, c)
-        end
-        return
-    end
-
-    local curPos = root.Position
-    local distFromSent = fakeLagLastSentPos and (curPos - fakeLagLastSentPos).Magnitude or 0
-    local acLimit = 2.8 -- Safe threshold below server AC teleport kick
-
-    if fakeLagIsChoking then
-        fakeLagCounter = fakeLagCounter + 1
-        local shouldRelease = (fakeLagCounter >= fakeLagTargetChoke)
-        if CFG.fakeLagAcGuard and distFromSent >= acLimit then
-            shouldRelease = true
-        end
-
-        if shouldRelease then
-            fakeLagIsChoking = false
-            fakeLagCounter = 0
-            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
-            fakeLagLastSentCF = root.CFrame
-            fakeLagLastSentPos = root.Position
-            updateFakeLagGhost(fakeLagLastSentCF, c)
+            if shouldRelease then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                fakeLagLastSentCF = root.CFrame
+                fakeLagLastSentPos = root.Position
+                updateFakeLagGhost(fakeLagLastSentCF, c)
+            else
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
+            end
         else
+            fakeLagIsChoking = true
+            fakeLagCounter = 0
+            if CFG.fakeLagMode == "Jitter" then
+                local minChoke = math.max(2, math.floor(CFG.fakeLagChokeTicks * 0.5))
+                local maxChoke = math.min(10, math.ceil(CFG.fakeLagChokeTicks * 1.4))
+                fakeLagTargetChoke = math.random(minChoke, maxChoke)
+            else
+                fakeLagTargetChoke = CFG.fakeLagChokeTicks
+            end
+            fakeLagLastSentCF = root.CFrame
+            fakeLagLastSentPos = root.Position
+            updateFakeLagGhost(fakeLagLastSentCF, c)
             pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
         end
-    else
-        fakeLagIsChoking = true
-        fakeLagCounter = 0
-        if CFG.fakeLagMode == "Jitter" then
-            local minChoke = math.max(2, math.floor(CFG.fakeLagChokeTicks * 0.5))
-            local maxChoke = math.min(10, math.ceil(CFG.fakeLagChokeTicks * 1.4))
-            fakeLagTargetChoke = math.random(minChoke, maxChoke)
-        else
-            fakeLagTargetChoke = CFG.fakeLagChokeTicks
-        end
-        fakeLagLastSentCF = root.CFrame
-        fakeLagLastSentPos = root.Position
-        updateFakeLagGhost(fakeLagLastSentCF, c)
-        pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
-    end
-end))
+    end))
+end
 
 -- Silent Aim Hook for manual clicks (ViewportPointToRay in performAttack)
 if type(STATE) == "table" and type(STATE.namecallHook) == "function" then
