@@ -454,10 +454,11 @@ local CFG = {
     throughWalls      = false,
     highlightTarget   = true,
 
-    -- Target Strafe
+    -- Target Strafe (AC Safe Bypass)
     targetStrafe      = false,
     strafeRadius      = 5.5,
-    strafeSpeed       = 26,
+    strafeSpeed       = 19.5,
+    acSafeSpeed       = true,
 
     -- Anti-Aim / Yaw / Spinbot
     yawEnabled        = false,
@@ -476,13 +477,14 @@ local CFG = {
     scaffoldEnabled   = false,
     autoBreakTrap     = false,
 
-    -- Movement & Velocity (Anti-KB)
+    -- Movement & Velocity (Anti-KB & No Jump Delay)
     antiKnockback     = true,
     kbHorizontalPct   = 0,
     kbVerticalPct     = 0,
     noSlowdown        = true,
     speedEnabled      = false,
-    speedValue        = 26,
+    speedValue        = 19.8,
+    noJumpDelay       = true,
     bhopEnabled       = false,
     alwaysSprint      = true,
     flyEnabled        = false,
@@ -495,11 +497,32 @@ local CFG = {
     bowAimbot         = false,
     bowRange          = 85,
 
-    -- Visuals & Cosmetics
+    -- 2D Box ESP & Visuals
     espEnabled        = true,
+    espBox2D          = true,
+    espHealthBar      = true,
+    espName           = true,
+    espDistance       = true,
+    espWeapon         = true,
     selectedSwordSkin = "default",
     selectedAura      = "default",
     selectedMcSkin    = "default",
+
+    -- Ambience, Custom Skies & Weather
+    customSkyEnabled  = false,
+    selectedSky       = "Default (Minecraft)",
+    rainEnabled       = false,
+    rainDensity       = 160,
+    rainSoundEnabled  = false,
+    rainSoundVolume   = 25,
+    timeOfDayEnabled  = false,
+    timeOfDayHour     = 18.5,
+    colorCorrection   = false,
+    saturationBoost   = 0.4,
+    contrastBoost     = 0.15,
+    customFogEnabled  = false,
+    fogEndDist        = 280,
+    configNameInput   = "default",
 }
 
 -- ========================================================================
@@ -1559,12 +1582,18 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
 
     function mod:RefreshHudVisuals()
         local isOn = CFG[self.cfgKey] == true
-        self.keyBtn.Text = formatKeyName(self.key)
-        self.keyBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
-        self.statusBtn.Text = isOn and "ON" or "OFF"
-        self.statusBtn.BackgroundColor3 = isOn
-            and Color3.fromRGB(40, 165, 95)
-            or Color3.fromRGB(138, 42, 52)
+        pcall(function()
+            if self.keyBtn and self.keyBtn.Parent then
+                self.keyBtn.Text = formatKeyName(self.key)
+                self.keyBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
+            end
+            if self.statusBtn and self.statusBtn.Parent then
+                self.statusBtn.Text = isOn and "ON" or "OFF"
+                self.statusBtn.BackgroundColor3 = isOn
+                    and Color3.fromRGB(40, 165, 95)
+                    or Color3.fromRGB(138, 42, 52)
+            end
+        end)
     end
 
     local suppressReentrant = false
@@ -1619,6 +1648,7 @@ local ModAntiTrap     = registerBindableModule("AntiTrap",     "Anti-Trap Mine",
 local ModVelocity     = registerBindableModule("Velocity",     "0% Velocity KB",   "antiKnockback",   Enum.KeyCode.Unknown, nil)
 local ModSpeed        = registerBindableModule("Speed",        "Speed / Strafe",   "speedEnabled",    Enum.KeyCode.Unknown, nil)
 local ModBhop         = registerBindableModule("Bhop",         "Auto Bhop",        "bhopEnabled",     Enum.KeyCode.Unknown, nil)
+local ModNoJumpDelay  = registerBindableModule("NoJumpDelay",  "No Jump Delay",    "noJumpDelay",     Enum.KeyCode.Unknown, nil)
 local ModFly          = registerBindableModule("Fly",          "3D Flight",        "flyEnabled",      Enum.KeyCode.Unknown, nil)
 local ModAutoGapple   = registerBindableModule("AutoGapple",   "Auto Gapple",      "autoGapple",      Enum.KeyCode.Unknown, nil)
 local ModBowAim       = registerBindableModule("BowAim",       "Silent Bow Aim",   "bowAimbot",       Enum.KeyCode.Unknown, nil)
@@ -1678,6 +1708,376 @@ end))
 -- ========================================================================
 -- 🎨 MACLIB UI CONSTRUCTION
 -- ========================================================================
+
+-- ========================================================================
+-- 🌌 AMBIENCE, CUSTOM SKIES & WEATHER SYSTEM
+-- ========================================================================
+local Lighting = game:GetService("Lighting")
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local originalSkyProps = nil
+if originalSky then
+    originalSkyProps = {
+        SkyboxBk = originalSky.SkyboxBk,
+        SkyboxDn = originalSky.SkyboxDn,
+        SkyboxFt = originalSky.SkyboxFt,
+        SkyboxLf = originalSky.SkyboxLf,
+        SkyboxRt = originalSky.SkyboxRt,
+        SkyboxUp = originalSky.SkyboxUp,
+        SunTextureId = originalSky.SunTextureId,
+        MoonTextureId = originalSky.MoonTextureId,
+    }
+end
+
+local SKY_PRESETS = {
+    ["Purple Nebula"] = {
+        SkyboxBk = "rbxassetid://159454299",
+        SkyboxDn = "rbxassetid://159454296",
+        SkyboxFt = "rbxassetid://159454293",
+        SkyboxLf = "rbxassetid://159454286",
+        SkyboxRt = "rbxassetid://159454300",
+        SkyboxUp = "rbxassetid://159454288",
+    },
+    ["Blood Moon"] = {
+        SkyboxBk = "rbxassetid://8038382",
+        SkyboxDn = "rbxassetid://8038382",
+        SkyboxFt = "rbxassetid://8038382",
+        SkyboxLf = "rbxassetid://8038382",
+        SkyboxRt = "rbxassetid://8038382",
+        SkyboxUp = "rbxassetid://8038382",
+    },
+    ["Vaporwave Sunset"] = {
+        SkyboxBk = "rbxassetid://600830446",
+        SkyboxDn = "rbxassetid://600831635",
+        SkyboxFt = "rbxassetid://600832720",
+        SkyboxLf = "rbxassetid://600834177",
+        SkyboxRt = "rbxassetid://600835641",
+        SkyboxUp = "rbxassetid://600836886",
+    },
+    ["Cyberpunk Stars"] = {
+        SkyboxBk = "rbxassetid://64448843",
+        SkyboxDn = "rbxassetid://64448847",
+        SkyboxFt = "rbxassetid://64448849",
+        SkyboxLf = "rbxassetid://64448852",
+        SkyboxRt = "rbxassetid://64448856",
+        SkyboxUp = "rbxassetid://64448860",
+    }
+}
+
+local function applySkyPreset(name)
+    local curSky = Lighting:FindFirstChildOfClass("Sky")
+    if name == "Default (Minecraft)" or name == "Default" or not CFG.customSkyEnabled then
+        if curSky and originalSkyProps then
+            for prop, val in pairs(originalSkyProps) do
+                pcall(function() curSky[prop] = val end)
+            end
+        end
+        return
+    end
+
+    if not curSky then
+        curSky = Instance.new("Sky")
+        curSky.Name = "MidHub_CustomSky"
+        curSky.Parent = Lighting
+    end
+
+    local skyData = SKY_PRESETS[name]
+    if skyData then
+        for prop, val in pairs(skyData) do
+            pcall(function() curSky[prop] = val end)
+        end
+    end
+end
+
+-- Ambient Rain Particles & Audio
+local rainAttachment = nil
+local rainEmitter = nil
+local rainSound = nil
+
+local function updateRainState()
+    if CFG.rainEnabled then
+        if not rainAttachment then
+            rainAttachment = Instance.new("Attachment")
+            rainAttachment.Name = "MidHub_RainAttachment"
+            rainAttachment.Position = Vector3.new(0, 18, 0)
+            rainAttachment.Parent = workspace.Terrain
+        end
+        if not rainEmitter then
+            rainEmitter = Instance.new("ParticleEmitter")
+            rainEmitter.Name = "MidHub_RainParticles"
+            rainEmitter.Rate = CFG.rainDensity or 160
+            rainEmitter.Lifetime = NumberRange.new(0.65, 0.95)
+            rainEmitter.Speed = NumberRange.new(55, 75)
+            rainEmitter.SpreadAngle = Vector2.new(6, 6)
+            rainEmitter.Size = NumberSequence.new(0.12, 0.08)
+            rainEmitter.Color = ColorSequence.new(Color3.fromRGB(180, 215, 255))
+            rainEmitter.Transparency = NumberSequence.new(0.3, 0.55)
+            rainEmitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+            rainEmitter.EmissionDirection = Enum.NormalId.Bottom
+            rainEmitter.Parent = rainAttachment
+        else
+            rainEmitter.Rate = CFG.rainDensity or 160
+            rainEmitter.Enabled = true
+        end
+    else
+        if rainEmitter then rainEmitter.Enabled = false end
+    end
+
+    -- Rain Sound
+    if CFG.rainSoundEnabled and CFG.rainEnabled then
+        if not rainSound then
+            rainSound = Instance.new("Sound")
+            rainSound.Name = "MidHub_RainSound"
+            rainSound.SoundId = "rbxassetid://9114223170"
+            rainSound.Looped = true
+            rainSound.Volume = math.clamp((CFG.rainSoundVolume or 25) / 100, 0, 1)
+            rainSound.Parent = workspace.CurrentCamera
+            rainSound:Play()
+        else
+            rainSound.Volume = math.clamp((CFG.rainSoundVolume or 25) / 100, 0, 1)
+            if not rainSound.IsPlaying then rainSound:Play() end
+        end
+    else
+        if rainSound and rainSound.IsPlaying then rainSound:Stop() end
+    end
+end
+
+-- World Lighting & Atmosphere Tweaks
+local colorCorrEffect = nil
+local function updateAtmosphere()
+    if CFG.colorCorrection then
+        if not colorCorrEffect then
+            colorCorrEffect = Instance.new("ColorCorrectionEffect")
+            colorCorrEffect.Name = "MidHub_ColorCorrection"
+            colorCorrEffect.Parent = Lighting
+        end
+        colorCorrEffect.Saturation = CFG.saturationBoost or 0.4
+        colorCorrEffect.Contrast = CFG.contrastBoost or 0.15
+        colorCorrEffect.Enabled = true
+    else
+        if colorCorrEffect then colorCorrEffect.Enabled = false end
+    end
+
+    if CFG.timeOfDayEnabled then
+        local hrs = math.floor(CFG.timeOfDayHour or 18)
+        local mins = math.floor(((CFG.timeOfDayHour or 18) - hrs) * 60)
+        Lighting.TimeOfDay = string.format("%02d:%02d:00", hrs, mins)
+    end
+
+    if CFG.customFogEnabled then
+        Lighting.FogEnd = CFG.fogEndDist or 280
+        Lighting.FogColor = Color3.fromRGB(15, 12, 28)
+    end
+end
+
+-- ========================================================================
+-- 💾 CONFIGURATION MANAGER (PRESETS + JSON SAVE / LOAD)
+-- ========================================================================
+local CONFIG_FILE_PREFIX = "MidHub_MCPVP_Config_"
+local LAST_CONFIG_FILE   = "MidHub_MCPVP_LastConfig.json"
+
+local function serializeConfig()
+    local data = {}
+    for k, v in pairs(CFG) do
+        if typeof(v) == "EnumItem" then
+            data[k] = { __type = "EnumItem", enum = tostring(v.EnumType), name = v.Name }
+        elseif typeof(v) == "Color3" then
+            data[k] = { __type = "Color3", r = v.R, g = v.G, b = v.B }
+        else
+            data[k] = v
+        end
+    end
+    return data
+end
+
+local function applyConfig(data)
+    if type(data) ~= "table" then return end
+    for k, v in pairs(data) do
+        if type(v) == "table" and v.__type == "EnumItem" then
+            pcall(function() CFG[k] = Enum[v.enum][v.name] end)
+        elseif type(v) == "table" and v.__type == "Color3" then
+            CFG[k] = Color3.new(v.r, v.g, v.b)
+        else
+            CFG[k] = v
+        end
+    end
+    for _, mod in pairs(MODULES) do
+        if mod.RefreshHudVisuals then mod:RefreshHudVisuals() end
+        if mod.macToggle and mod.macToggle.SetValue then
+            pcall(function() mod.macToggle:SetValue(CFG[mod.cfgKey] == true) end)
+        end
+    end
+    updateNoSlowPatches()
+    applySkyPreset(CFG.selectedSky or "Default")
+    updateRainState()
+    updateAtmosphere()
+end
+
+local function saveConfigFile(cfgName)
+    local name = tostring(cfgName or "default"):gsub("[%c%s]+", "_")
+    local filename = CONFIG_FILE_PREFIX .. name .. ".json"
+    local encoded = HttpService:JSONEncode(serializeConfig())
+    pcall(function() fWriteFile(filename, encoded) end)
+    pcall(function() fWriteFile(LAST_CONFIG_FILE, encoded) end)
+    return filename
+end
+
+local function loadConfigFile(cfgName)
+    local name = tostring(cfgName or "default"):gsub("[%c%s]+", "_")
+    local filename = CONFIG_FILE_PREFIX .. name .. ".json"
+    if not (fIsFile and fIsFile(filename)) then
+        if fIsFile and fIsFile(LAST_CONFIG_FILE) then
+            filename = LAST_CONFIG_FILE
+        else
+            return false, "Config file not found: " .. filename
+        end
+    end
+    local raw = fReadFile(filename)
+    if not raw then return false, "Could not read config file." end
+    local ok, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not (ok and type(parsed) == "table") then
+        return false, "Config file corrupted."
+    end
+    applyConfig(parsed)
+    return true, "Config loaded: " .. filename
+end
+
+local PRESETS = {
+    HvH = {
+        killAura = true, auraReach = 9.2, auraCps = 11, auraHitPart = "Switch",
+        autoBlockHit = true, autoEquipSword = true, targetStrafe = true, strafeRadius = 5.5,
+        strafeSpeed = 19.5, acSafeSpeed = true,
+        yawEnabled = true, yawMode = "Spinbot 360°", spinSpeed = 720,
+        antiKnockback = true, kbHorizontalPct = 0, kbVerticalPct = 0,
+        noSlowdown = true, speedEnabled = true, speedValue = 19.8,
+        noJumpDelay = true, bhopEnabled = true, alwaysSprint = true,
+        autoGapple = true, gappleHpThreshold = 13,
+        espEnabled = true, espBox2D = true, espHealthBar = true, espName = true, espDistance = true
+    },
+    Legit = {
+        killAura = true, auraReach = 5.4, auraCps = 9, auraHitPart = "Body",
+        autoBlockHit = false, autoEquipSword = true, targetStrafe = false,
+        yawEnabled = false,
+        antiKnockback = true, kbHorizontalPct = 65, kbVerticalPct = 70,
+        noSlowdown = true, speedEnabled = false, acSafeSpeed = true,
+        noJumpDelay = true, bhopEnabled = false, alwaysSprint = true,
+        autoGapple = true, gappleHpThreshold = 10,
+        espEnabled = true, espBox2D = true, espHealthBar = true, espName = true, espDistance = true
+    },
+    Blatant = {
+        killAura = true, auraReach = 9.5, auraCps = 13, auraHitPart = "Head",
+        autoBlockHit = true, autoEquipSword = true, targetStrafe = true, strafeRadius = 5.0,
+        strafeSpeed = 20.2, acSafeSpeed = true,
+        yawEnabled = true, yawMode = "Spinbot 360°", spinSpeed = 1400,
+        antiKnockback = true, kbHorizontalPct = 0, kbVerticalPct = 0,
+        noSlowdown = true, speedEnabled = true, speedValue = 20.2,
+        noJumpDelay = true, bhopEnabled = true, alwaysSprint = true,
+        autoTrap = true, autoGapple = true, gappleHpThreshold = 15,
+        espEnabled = true, espBox2D = true, espHealthBar = true, espName = true, espDistance = true, espWeapon = true
+    }
+}
+
+-- ========================================================================
+-- 🎯 DRAWING-BASED 2D BOX ESP SUITE
+-- ========================================================================
+local espRegistry = {} -- [Player] = { boxOutline, box, hpOutline, hpBar, nameLbl, distLbl, weaponLbl }
+
+local function createPlayerEsp(plr)
+    if espRegistry[plr] then return espRegistry[plr] end
+    if type(Drawing) ~= "table" or type(Drawing.new) ~= "function" then return nil end
+
+    local ok, res = pcall(function()
+        local boxOutline = Drawing.new("Square")
+        boxOutline.Thickness = 2.4
+        boxOutline.Color = Color3.fromRGB(0, 0, 0)
+        boxOutline.Filled = false
+        boxOutline.Visible = false
+
+        local box = Drawing.new("Square")
+        box.Thickness = 1.2
+        box.Color = Color3.fromRGB(168, 85, 247)
+        box.Filled = false
+        box.Visible = false
+
+        local hpOutline = Drawing.new("Square")
+        hpOutline.Thickness = 1
+        hpOutline.Color = Color3.fromRGB(0, 0, 0)
+        hpOutline.Filled = true
+        hpOutline.Visible = false
+
+        local hpBar = Drawing.new("Square")
+        hpBar.Thickness = 1
+        hpBar.Color = Color3.fromRGB(34, 197, 94)
+        hpBar.Filled = true
+        hpBar.Visible = false
+
+        local nameLbl = Drawing.new("Text")
+        nameLbl.Size = 13
+        nameLbl.Center = true
+        nameLbl.Outline = true
+        nameLbl.Color = Color3.fromRGB(255, 255, 255)
+        nameLbl.Visible = false
+
+        local distLbl = Drawing.new("Text")
+        distLbl.Size = 11
+        distLbl.Center = true
+        distLbl.Outline = true
+        distLbl.Color = Color3.fromRGB(215, 215, 235)
+        distLbl.Visible = false
+
+        local weaponLbl = Drawing.new("Text")
+        weaponLbl.Size = 10
+        weaponLbl.Center = true
+        weaponLbl.Outline = true
+        weaponLbl.Color = Color3.fromRGB(245, 158, 11)
+        weaponLbl.Visible = false
+
+        return {
+            boxOutline = boxOutline,
+            box = box,
+            hpOutline = hpOutline,
+            hpBar = hpBar,
+            nameLbl = nameLbl,
+            distLbl = distLbl,
+            weaponLbl = weaponLbl,
+        }
+    end)
+
+    if ok and res then
+        espRegistry[plr] = res
+        return res
+    end
+    return nil
+end
+
+local function cleanupPlayerEsp(plr)
+    local esp = espRegistry[plr]
+    if esp then
+        pcall(function()
+            if esp.boxOutline then esp.boxOutline:Remove() end
+            if esp.box then esp.box:Remove() end
+            if esp.hpOutline then esp.hpOutline:Remove() end
+            if esp.hpBar then esp.hpBar:Remove() end
+            if esp.nameLbl then esp.nameLbl:Remove() end
+            if esp.distLbl then esp.distLbl:Remove() end
+            if esp.weaponLbl then esp.weaponLbl:Remove() end
+        end)
+        espRegistry[plr] = nil
+    end
+end
+
+local function hidePlayerEsp(esp)
+    if not esp then return end
+    esp.boxOutline.Visible = false
+    esp.box.Visible = false
+    esp.hpOutline.Visible = false
+    esp.hpBar.Visible = false
+    esp.nameLbl.Visible = false
+    esp.distLbl.Visible = false
+    esp.weaponLbl.Visible = false
+end
+
+Players.PlayerRemoving:Connect(cleanupPlayerEsp)
+
 local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
 Window = MacLib:Window({
@@ -1698,6 +2098,8 @@ local TrapTab     = TabGroup:Tab({ Name = "Auto Trap & Scaffold",  Image = "rbxa
 local MoveTab     = TabGroup:Tab({ Name = "Velocity & Speed",      Image = "rbxassetid://10734920149" })
 local UtilityTab  = TabGroup:Tab({ Name = "Gapple & Bow Aim",      Image = "rbxassetid://10709782497" })
 local VisualsTab  = TabGroup:Tab({ Name = "ESP, Skins & HUD",      Image = "rbxassetid://10723346959" })
+local AmbienceTab = TabGroup:Tab({ Name = "Ambience & Weather",     Image = "rbxassetid://10734934557" })
+local ConfigTab   = TabGroup:Tab({ Name = "Configs & Presets",     Image = "rbxassetid://10734922324" })
 
 local function bindMacToggle(section, mod)
     local t = section:Toggle({
@@ -1959,14 +2361,21 @@ bindMacToggle(SpeedSec, ModSpeed)
 
 SpeedSec:Slider({
     Name = "Move Speed Value",
-    Default = 26,
-    Minimum = 16,
-    Maximum = 65,
+    Default = 19.8,
+    Minimum = 14,
+    Maximum = 45,
     DisplayMethod = "Value",
-    Precision = 0,
+    Precision = 1,
     Callback = function(v) CFG.speedValue = v end
 })
 
+SpeedSec:Toggle({
+    Name = "AC Safe Bypass Speed (Anti-Kick)",
+    Default = true,
+    Callback = function(v) CFG.acSafeSpeed = v end
+})
+
+bindMacToggle(SpeedSec, ModNoJumpDelay)
 bindMacToggle(SpeedSec, ModBhop)
 bindMacToggle(SpeedSec, ModFly)
 
@@ -2046,8 +2455,38 @@ EspSec:Toggle({
     Callback = function(v) CFG.notifSound = v end
 })
 
-EspSec:Header({ Name = "HvH Player ESP" })
+EspSec:Header({ Name = "HvH 2D Box ESP" })
 bindMacToggle(EspSec, ModESP)
+
+EspSec:Toggle({
+    Name = "2D Bounding Box",
+    Default = true,
+    Callback = function(v) CFG.espBox2D = v end
+})
+
+EspSec:Toggle({
+    Name = "2D Health Bar (Gradient)",
+    Default = true,
+    Callback = function(v) CFG.espHealthBar = v end
+})
+
+EspSec:Toggle({
+    Name = "Player Name Label",
+    Default = true,
+    Callback = function(v) CFG.espName = v end
+})
+
+EspSec:Toggle({
+    Name = "Distance & Hearts Tag",
+    Default = true,
+    Callback = function(v) CFG.espDistance = v end
+})
+
+EspSec:Toggle({
+    Name = "Weapon / Item Held Tag",
+    Default = true,
+    Callback = function(v) CFG.espWeapon = v end
+})
 
 local CosSec = VisualsTab:Section({ Side = "Right" })
 CosSec:Header({ Name = "Client Cosmetics Unlocker" })
@@ -2124,6 +2563,196 @@ CosSec:Dropdown({
 })
 
 -- ========================================================================
+
+-- ========================================================================
+-- 🌌 TAB 6: AMBIENCE & WEATHER UI
+-- ========================================================================
+local SkySec = AmbienceTab:Section({ Side = "Left" })
+SkySec:Header({ Name = "Custom Skybox & Time of Day" })
+
+SkySec:Toggle({
+    Name = "Enable Custom Skybox",
+    Default = false,
+    Callback = function(v)
+        CFG.customSkyEnabled = v
+        applySkyPreset(v and CFG.selectedSky or "Default")
+    end
+})
+
+SkySec:Dropdown({
+    Name = "Skybox Theme",
+    Multi = false,
+    Required = true,
+    Options = { "Default (Minecraft)", "Purple Nebula", "Blood Moon", "Vaporwave Sunset", "Cyberpunk Stars" },
+    Default = 2,
+    Callback = function(v)
+        CFG.selectedSky = v
+        if CFG.customSkyEnabled then applySkyPreset(v) end
+    end
+})
+
+SkySec:Toggle({
+    Name = "Custom Time of Day",
+    Default = false,
+    Callback = function(v)
+        CFG.timeOfDayEnabled = v
+        updateAtmosphere()
+    end
+})
+
+SkySec:Slider({
+    Name = "Time of Day (Hours)",
+    Default = 18.5,
+    Minimum = 0,
+    Maximum = 24,
+    DisplayMethod = "Value",
+    Precision = 1,
+    Callback = function(v)
+        CFG.timeOfDayHour = v
+        if CFG.timeOfDayEnabled then updateAtmosphere() end
+    end
+})
+
+local WeatherSec = AmbienceTab:Section({ Side = "Right" })
+WeatherSec:Header({ Name = "Rain & Atmospheric Effects" })
+
+WeatherSec:Toggle({
+    Name = "Aesthetic Rain Effect",
+    Default = false,
+    Callback = function(v)
+        CFG.rainEnabled = v
+        updateRainState()
+    end
+})
+
+WeatherSec:Slider({
+    Name = "Rain Particle Density",
+    Default = 160,
+    Minimum = 50,
+    Maximum = 350,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(v)
+        CFG.rainDensity = v
+        if CFG.rainEnabled then updateRainState() end
+    end
+})
+
+WeatherSec:Toggle({
+    Name = "Ambient Rain Audio Loop",
+    Default = false,
+    Callback = function(v)
+        CFG.rainSoundEnabled = v
+        updateRainState()
+    end
+})
+
+WeatherSec:Slider({
+    Name = "Rain Audio Volume (%)",
+    Default = 25,
+    Minimum = 5,
+    Maximum = 100,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(v)
+        CFG.rainSoundVolume = v
+        if CFG.rainEnabled and CFG.rainSoundEnabled then updateRainState() end
+    end
+})
+
+WeatherSec:Toggle({
+    Name = "ColorCorrection & Saturation Boost",
+    Default = false,
+    Callback = function(v)
+        CFG.colorCorrection = v
+        updateAtmosphere()
+    end
+})
+
+WeatherSec:Slider({
+    Name = "Saturation Boost",
+    Default = 0.4,
+    Minimum = 0,
+    Maximum = 1.5,
+    DisplayMethod = "Value",
+    Precision = 2,
+    Callback = function(v)
+        CFG.saturationBoost = v
+        if CFG.colorCorrection then updateAtmosphere() end
+    end
+})
+
+-- ========================================================================
+-- 💾 TAB 7: CONFIGS & PRESETS UI
+-- ========================================================================
+local PresetSec = ConfigTab:Section({ Side = "Left" })
+PresetSec:Header({ Name = "Quick Combat Presets" })
+
+PresetSec:Button({
+    Name = "⚡ Load Default HvH Preset",
+    Callback = function()
+        applyConfig(PRESETS.HvH)
+        Window:Notify({ Title = "Config Presets", Description = "Loaded 'Default HvH' preset!", Lifetime = 3 })
+    end
+})
+
+PresetSec:Button({
+    Name = "🛡️ Load Legit / Closet Preset",
+    Callback = function()
+        applyConfig(PRESETS.Legit)
+        Window:Notify({ Title = "Config Presets", Description = "Loaded 'Legit / Closet' preset!", Lifetime = 3 })
+    end
+})
+
+PresetSec:Button({
+    Name = "☠️ Load Blatant / Rage Preset",
+    Callback = function()
+        applyConfig(PRESETS.Blatant)
+        Window:Notify({ Title = "Config Presets", Description = "Loaded 'Blatant / Rage' preset!", Lifetime = 3 })
+    end
+})
+
+local FileSec = ConfigTab:Section({ Side = "Right" })
+FileSec:Header({ Name = "Custom Config File Management" })
+
+local configInputName = "default"
+FileSec:Input({
+    Name = "Config File Name",
+    Placeholder = "e.g. duels_hvh",
+    Default = "default",
+    Callback = function(v)
+        if v and #v > 0 then configInputName = v end
+    end
+})
+
+FileSec:Button({
+    Name = "💾 Save Current Config",
+    Callback = function()
+        local fname = saveConfigFile(configInputName)
+        Window:Notify({ Title = "Config Saved", Description = "Saved settings to " .. fname, Lifetime = 3.5 })
+    end
+})
+
+FileSec:Button({
+    Name = "📂 Load Selected Config",
+    Callback = function()
+        local ok, msg = loadConfigFile(configInputName)
+        Window:Notify({
+            Title = ok and "Config Loaded" or "Load Failed",
+            Description = msg,
+            Lifetime = 3.5
+        })
+    end
+})
+
+FileSec:Button({
+    Name = "🔄 Reset All to Defaults",
+    Callback = function()
+        applyConfig(PRESETS.HvH)
+        Window:Notify({ Title = "Reset Settings", Description = "Reset all features to clean defaults.", Lifetime = 3 })
+    end
+})
+
 -- 📡 2D ESP OVERLAY
 -- ========================================================================
 local espGui = Instance.new("ScreenGui")
@@ -2131,6 +2760,18 @@ espGui.Name = "MidHub_McHvH_ESP"
 espGui.ResetOnSpawn = false
 espGui.IgnoreGuiInset = true
 espGui.Parent = getGuiContainer()
+
+
+-- No Jump Delay (Instant Land-to-Jump Event Hook)
+trackConn(UserInputService.JumpRequest:Connect(function()
+    if CFG.noJumpDelay then
+        local c = getChar()
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        if h and h.Health > 0 then
+            h:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end))
 
 local espPool = {}
 local function getEspTag(idx)
@@ -2198,23 +2839,37 @@ trackConn(RunService.PostSimulation:Connect(function(dt)
             root.CFrame = root.CFrame + moveVec.Unit * (CFG.flySpeed * dt)
         end
     else
+        -- No Jump Delay ground check
+        if CFG.noJumpDelay and hum and hum.Health > 0 then
+            if (UserInputService:IsKeyDown(Enum.KeyCode.Space) or hum.Jump) and hum.FloorMaterial ~= Enum.Material.Air then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+
         local auraTarget = CFG.killAura and getClosestEnemy(CFG.auraReach + 3) or nil
         if CFG.targetStrafe and auraTarget then
             local tRoot = auraTarget:FindFirstChild("HumanoidRootPart")
             if tRoot then
-                strafeAngle = strafeAngle + (CFG.strafeSpeed / math.max(1, CFG.strafeRadius)) * dt
-                local offset = Vector3.new(math.cos(strafeAngle) * CFG.strafeRadius, 0, math.sin(strafeAngle) * CFG.strafeRadius)
+                local effectiveRadius = math.max(2.5, CFG.strafeRadius)
+                local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14, 19.8) or CFG.strafeSpeed
+                strafeAngle = strafeAngle + (effectiveSpeed / effectiveRadius) * dt
+                local offset = Vector3.new(math.cos(strafeAngle) * effectiveRadius, 0, math.sin(strafeAngle) * effectiveRadius)
                 local goalPos = Vector3.new(tRoot.Position.X + offset.X, root.Position.Y, tRoot.Position.Z + offset.Z)
                 local toGoal = (goalPos - root.Position)
-                if toGoal.Magnitude > 0.2 then
-                    local vel = toGoal.Unit * CFG.strafeSpeed
-                    root.AssemblyLinearVelocity = Vector3.new(vel.X, root.AssemblyLinearVelocity.Y, vel.Z)
+                if toGoal.Magnitude > 0.15 then
+                    local moveDir = toGoal.Unit
+                    hum:Move(moveDir, false) -- Legitimate humanoid movement input (Bypasses AC checks)
+                    if CFG.speedEnabled or not CFG.acSafeSpeed then
+                        local cap = CFG.acSafeSpeed and 19.8 or effectiveSpeed
+                        local curY = root.AssemblyLinearVelocity.Y
+                        root.AssemblyLinearVelocity = Vector3.new(moveDir.X * cap, curY, moveDir.Z * cap)
+                    end
                 end
             end
         elseif CFG.speedEnabled or (CFG.noSlowdown and (c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted"))) then
             local moveDir = hum.MoveDirection
             if moveDir.Magnitude > 0.05 then
-                local spd = CFG.speedEnabled and CFG.speedValue or 20
+                local spd = CFG.speedEnabled and (CFG.acSafeSpeed and math.min(CFG.speedValue, 20.0) or CFG.speedValue) or 18.5
                 local horiz = Vector3.new(moveDir.X, 0, moveDir.Z).Unit * spd
                 root.AssemblyLinearVelocity = Vector3.new(horiz.X, root.AssemblyLinearVelocity.Y, horiz.Z)
             end
@@ -2595,26 +3250,105 @@ trackConn(RunService.RenderStepped:Connect(function()
     local myRoot = getRoot()
     local count = 0
 
-    if myRoot and CFG.espEnabled then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= lp and plr.Character then
-                local r = plr.Character:FindFirstChild("HumanoidRootPart")
-                local h = plr.Character:FindFirstChildOfClass("Humanoid")
-                if r and h and h.Health > 0 then
-                    local screenPos, onScreen = camera:WorldToViewportPoint(r.Position + Vector3.new(0, 3.2, 0))
-                    if onScreen then
-                        count = count + 1
-                        local lbl = getEspTag(count)
-                        local dist = (r.Position - myRoot.Position).Magnitude
-                        local hearts = math.ceil(h.Health / 2)
-                        lbl.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
-                        lbl.Text = string.format("%s [%.0f♥] (%.0fm)", plr.DisplayName, hearts, dist)
-                        lbl.TextColor3 = (dist <= CFG.auraReach)
-                            and Color3.fromRGB(244, 63, 94)
-                            or Color3.fromRGB(56, 189, 248)
-                        lbl.Visible = true
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp then
+            local esp = createPlayerEsp(plr)
+            local char = plr.Character
+            local r = char and char:FindFirstChild("HumanoidRootPart")
+            local h = char and char:FindFirstChildOfClass("Humanoid")
+
+            if CFG.espEnabled and myRoot and r and h and h.Health > 0 then
+                local rootScreen, onScreen = camera:WorldToViewportPoint(r.Position)
+                if onScreen and esp then
+                    local topScreen = camera:WorldToViewportPoint(r.Position + Vector3.new(0, 2.6, 0))
+                    local botScreen = camera:WorldToViewportPoint(r.Position - Vector3.new(0, 3.2, 0))
+                    local boxH = math.abs(botScreen.Y - topScreen.Y)
+                    local boxW = math.clamp(boxH * 0.65, 12, 450)
+                    local boxX = rootScreen.X - boxW / 2
+                    local boxY = topScreen.Y
+
+                    local dist = (r.Position - myRoot.Position).Magnitude
+                    local inReach = dist <= (CFG.auraReach or 9.2)
+                    local mainColor = inReach and Color3.fromRGB(255, 65, 95) or Color3.fromRGB(168, 85, 247)
+
+                    -- 2D Bounding Box
+                    if CFG.espBox2D then
+                        esp.boxOutline.Size = Vector2.new(boxW, boxH)
+                        esp.boxOutline.Position = Vector2.new(boxX, boxY)
+                        esp.boxOutline.Visible = true
+
+                        esp.box.Size = Vector2.new(boxW, boxH)
+                        esp.box.Position = Vector2.new(boxX, boxY)
+                        esp.box.Color = mainColor
+                        esp.box.Visible = true
+                    else
+                        esp.boxOutline.Visible = false
+                        esp.box.Visible = false
                     end
+
+                    -- Dynamic Health Bar
+                    if CFG.espHealthBar then
+                        local hpPct = math.clamp(h.Health / math.max(1, h.MaxHealth), 0, 1)
+                        local barW = 3
+                        local barH = math.max(2, boxH * hpPct)
+
+                        esp.hpOutline.Position = Vector2.new(boxX - 6, boxY - 1)
+                        esp.hpOutline.Size = Vector2.new(barW + 2, boxH + 2)
+                        esp.hpOutline.Visible = true
+
+                        esp.hpBar.Position = Vector2.new(boxX - 5, boxY + (boxH - barH))
+                        esp.hpBar.Size = Vector2.new(barW, barH)
+                        esp.hpBar.Color = Color3.fromHSV(hpPct * 0.33, 0.9, 0.95)
+                        esp.hpBar.Visible = true
+                    else
+                        esp.hpOutline.Visible = false
+                        esp.hpBar.Visible = false
+                    end
+
+                    -- Name Label
+                    if CFG.espName then
+                        esp.nameLbl.Position = Vector2.new(rootScreen.X, boxY - 16)
+                        esp.nameLbl.Text = plr.DisplayName
+                        esp.nameLbl.Color = inReach and Color3.fromRGB(255, 200, 210) or Color3.fromRGB(255, 255, 255)
+                        esp.nameLbl.Visible = true
+                    else
+                        esp.nameLbl.Visible = false
+                    end
+
+                    -- Distance & Hearts
+                    if CFG.espDistance then
+                        local hearts = math.ceil(h.Health / 2)
+                        esp.distLbl.Position = Vector2.new(rootScreen.X, boxY + boxH + 2)
+                        esp.distLbl.Text = string.format("[%.0f♥]  %.0fm", hearts, dist)
+                        esp.distLbl.Color = inReach and Color3.fromRGB(255, 120, 140) or Color3.fromRGB(215, 215, 235)
+                        esp.distLbl.Visible = true
+                    else
+                        esp.distLbl.Visible = false
+                    end
+
+                    -- Weapon / Tool Tag
+                    if CFG.espWeapon then
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then
+                            esp.weaponLbl.Position = Vector2.new(rootScreen.X, boxY + boxH + 15)
+                            esp.weaponLbl.Text = tool.Name
+                            esp.weaponLbl.Visible = true
+                        else
+                            esp.weaponLbl.Visible = false
+                        end
+                    else
+                        esp.weaponLbl.Visible = false
+                    end
+
+                    -- Fallback ScreenGui Label
+                    count = count + 1
+                    local lbl = getEspTag(count)
+                    lbl.Visible = false
+                else
+                    hidePlayerEsp(esp)
                 end
+            else
+                hidePlayerEsp(esp)
             end
         end
     end
@@ -2683,6 +3417,19 @@ ENV.__MIDHUB_MCHVH_CLEANUP = function()
     end
     if Window and Window.Unload then
         pcall(function() Window:Unload() end)
+    end
+    for plr, _ in pairs(espRegistry) do
+        cleanupPlayerEsp(plr)
+    end
+    table.clear(espRegistry)
+    if rainEmitter then pcall(function() rainEmitter:Destroy() end) end
+    if rainAttachment then pcall(function() rainAttachment:Destroy() end) end
+    if rainSound then pcall(function() rainSound:Stop() rainSound:Destroy() end) end
+    if colorCorrEffect then pcall(function() colorCorrEffect:Destroy() end) end
+    if originalSkyProps and originalSky then
+        for prop, val in pairs(originalSkyProps) do
+            pcall(function() originalSky[prop] = val end)
+        end
     end
 end
 
