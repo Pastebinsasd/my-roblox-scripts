@@ -646,21 +646,6 @@ local function bindClientClosures()
                     if src:find("MinecraftCombatClient") then
                         if info.name == "performAttack" then
                             performAttackFn = fn
-                            if hookfunction and not ENV.__MIDHUB_HOOKED_ATTACK then
-                                ENV.__MIDHUB_HOOKED_ATTACK = true
-                                local origPerformAttack = nil
-                                origPerformAttack = hookfunction(fn, function(...)
-                                    if CFG.criticalsEnabled and applyCriticalsPreAttack then
-                                        local c = lp.Character
-                                        local root = c and c:FindFirstChild("HumanoidRootPart")
-                                        local hum = c and c:FindFirstChildOfClass("Humanoid")
-                                        if root and hum then
-                                            pcall(applyCriticalsPreAttack, root, hum, nil)
-                                        end
-                                    end
-                                    return origPerformAttack(...)
-                                end)
-                            end
                         elseif info.name == "setThirdPerson" then
                             setThirdPersonFn = fn
                         end
@@ -820,42 +805,21 @@ local function spawnCriticalHitEffect(targetChar)
 end
 
 applyCriticalsPreAttack = function(myRoot, myHum, payload)
-    if not CFG.criticalsEnabled or not myRoot or not myHum then return "READY" end
+    if not CFG.criticalsEnabled or not myRoot or not myHum then return end
 
     local isAirborne = (myHum.FloorMaterial == Enum.Material.Air)
     local mode = CFG.criticalsMode
 
-    if mode == "Smart Fall" then
-        if isAirborne then
-            -- If rising in a jump/bhop, wait until peak height passes and downward fall starts (Y-vel <= 0.3)
-            if myRoot.AssemblyLinearVelocity.Y > 0.3 then
-                return "WAIT_FALL"
-            end
-        end
-    elseif mode == "Mini Hop" then
-        if not isAirborne then
-            local now = os.clock()
-            if (now - lastCritHopTime) > 0.35 then
-                lastCritHopTime = now
-                myHum:ChangeState(Enum.HumanoidStateType.Jumping)
-                myHum.Jump = true
-                return "WAIT_FALL"
-            end
-        else
-            if myRoot.AssemblyLinearVelocity.Y > 0.3 then
-                return "WAIT_FALL"
-            end
-        end
-    elseif mode == "Packet" then
+    if mode == "Packet" then
         if not isAirborne then
             -- Micro-packet vertical displacement: lifts character slightly into falling Freefall state on server
             local origCF = myRoot.CFrame
             local origVel = myRoot.AssemblyLinearVelocity
-            myRoot.CFrame = origCF + Vector3.new(0, 0.18, 0)
+            myRoot.CFrame = origCF + Vector3.new(0, 0.16, 0)
             myRoot.AssemblyLinearVelocity = Vector3.new(origVel.X, -2.5, origVel.Z)
             myHum:ChangeState(Enum.HumanoidStateType.Freefall)
             if payload and payload.eye then
-                payload.eye = payload.eye + Vector3.new(0, 0.18, 0)
+                payload.eye = payload.eye + Vector3.new(0, 0.16, 0)
             end
             task.defer(function()
                 if myRoot and myRoot.Parent then
@@ -863,14 +827,17 @@ applyCriticalsPreAttack = function(myRoot, myHum, payload)
                     myRoot.AssemblyLinearVelocity = origVel
                 end
             end)
-        else
-            if myRoot.AssemblyLinearVelocity.Y > 0.3 then
-                return "WAIT_FALL"
+        end
+    elseif mode == "Mini Hop" then
+        if not isAirborne then
+            local now = os.clock()
+            if (now - lastCritHopTime) > 0.3 then
+                lastCritHopTime = now
+                myHum:ChangeState(Enum.HumanoidStateType.Jumping)
+                myHum.Jump = true
             end
         end
     end
-
-    return "READY"
 end
 
 if ConfirmedMeleeFlash then
@@ -3843,14 +3810,6 @@ task.spawn(function()
                     -- Strictly require a valid MinecraftMeleeGeometry intersection within <= maxAllowedReach (<= 9.5)
                     -- AND clear line-of-sight (already verified inside multipoint loop)
                     if unitDir and hitDist and hitDist <= maxAllowedReach then
-                        -- Criticals Pre-Attack Check:
-                        if CFG.criticalsEnabled then
-                            local critStatus = applyCriticalsPreAttack(myRoot, myHum, nil)
-                            if critStatus == "WAIT_FALL" then
-                                break
-                            end
-                        end
-
                         -- Align horizontal Root CFrame with unitDir before firing so LookVector matches attack direction
                         local horizDir = Vector3.new(unitDir.X, 0, unitDir.Z)
                         if horizDir.Magnitude > 0.05 then
