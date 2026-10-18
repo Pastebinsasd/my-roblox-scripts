@@ -1185,7 +1185,7 @@ local function formatKeyName(keyCode)
     local shortMap = {
         RightControl = "RCtrl",
         LeftControl  = "LCtrl",
-        RightShift   = "RightShift",
+        RightShift   = "RShift",
         LeftShift    = "LShift",
         RightAlt     = "RAlt",
         LeftAlt      = "LAlt",
@@ -1318,7 +1318,7 @@ end
 local keybindsFrame = Instance.new("Frame")
 keybindsFrame.Name = "KeybindsContainer"
 keybindsFrame.Position = UDim2.fromOffset(20, 115)
-keybindsFrame.Size = UDim2.fromOffset(264, 400)
+keybindsFrame.Size = UDim2.fromOffset(270, 400)
 keybindsFrame.BackgroundTransparency = 1
 keybindsFrame.BorderSizePixel = 0
 keybindsFrame.Parent = hudGui
@@ -1580,13 +1580,13 @@ end
 local function updateHudHeight(collapsed)
     if collapsed then
         TweenService:Create(keybindsFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(264, 38)
+            Size = UDim2.fromOffset(270, 38)
         }):Play()
     else
         local totalRows = #MODULE_ORDER + 1 -- +1 for Show/hide menu row
         local targetH = math.clamp(48 + totalRows * 34, 180, 480)
         TweenService:Create(keybindsFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(264, targetH)
+            Size = UDim2.fromOffset(270, targetH)
         }):Play()
     end
 end
@@ -1785,11 +1785,11 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
 
     -- Module Title Label
     local nameLbl = Instance.new("TextLabel")
-    nameLbl.Size = UDim2.new(1, -132, 1, 0)
+    nameLbl.Size = UDim2.new(1, -128, 1, 0)
     nameLbl.Position = UDim2.fromOffset(82, 0)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Font = Enum.Font.GothamMedium
-    nameLbl.TextSize = 11.5
+    nameLbl.TextSize = 12
     nameLbl.TextColor3 = Color3.fromRGB(185, 182, 202)
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
     nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
