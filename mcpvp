@@ -461,7 +461,7 @@ local CFG = {
     -- Target Strafe (AC Safe Bypass)
     targetStrafe      = false,
     strafeRadius      = 5.5,
-    strafeSpeed       = 19.8,
+    strafeSpeed       = 18.0,
     acSafeSpeed       = true,
 
     -- Anti-Aim / Yaw / Spinbot
@@ -487,7 +487,7 @@ local CFG = {
     kbVerticalPct     = 0,
     noSlowdown        = true,
     speedEnabled      = false,
-    speedValue        = 20.2,
+    speedValue        = 18.2,
     noJumpDelay       = true,
     bhopEnabled       = false,
     alwaysSprint      = true,
@@ -2193,9 +2193,9 @@ AuraSec:Slider({
 
 AuraSec:Slider({
     Name = "Target Strafe Speed",
-    Default = 19.8,
-    Minimum = 14.0,
-    Maximum = 35.0,
+    Default = 18.0,
+    Minimum = 12.0,
+    Maximum = 30.0,
     DisplayMethod = "Value",
     Precision = 1,
     Callback = function(v) CFG.strafeSpeed = v end
@@ -2382,10 +2382,10 @@ SpeedSec:Header({ Name = "Speed, Bhop & Flight" })
 bindMacToggle(SpeedSec, ModSpeed)
 
 SpeedSec:Slider({
-    Name = "Move Speed Value (Safe max: 20.5)",
-    Default = 20.2,
+    Name = "Move Speed Value (Safe max: 18.5)",
+    Default = 18.2,
     Minimum = 14.0,
-    Maximum = 45.0,
+    Maximum = 35.0,
     DisplayMethod = "Value",
     Precision = 1,
     Callback = function(v) CFG.speedValue = v end
@@ -2883,8 +2883,8 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
             if activeAuraTarget and activeAuraTarget:FindFirstChild("HumanoidRootPart") then
                 return activeAuraTarget
             end
-            local enemy, d = getClosestEnemy(math.max(CFG.strafeRadius + 8, 18))
-            if enemy and d <= math.max(CFG.strafeRadius + 8, 18) then
+            local enemy, d = getClosestEnemy(math.max(CFG.strafeRadius + 3.5, 9.5))
+            if enemy and d <= math.max(CFG.strafeRadius + 3.5, 9.5) then
                 return enemy
             end
             return nil
@@ -2895,44 +2895,51 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
         if CFG.targetStrafe and strafeTarget then
             local tRoot = strafeTarget:FindFirstChild("HumanoidRootPart")
             if tRoot then
-                isStrafing = true
-                local effectiveRadius = math.max(2.5, CFG.strafeRadius)
-                local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14.0, 20.2) or CFG.strafeSpeed
-                
-                if lastStrafeTarget ~= strafeTarget then
-                    lastStrafeTarget = strafeTarget
-                    strafeAngle = math.atan2(root.Position.Z - tRoot.Position.Z, root.Position.X - tRoot.Position.X)
-                end
+                local myPos = root.Position
+                local tPos = tRoot.Position
+                local diff = Vector3.new(tPos.X - myPos.X, 0, tPos.Z - myPos.Z)
+                local curDist = diff.Magnitude
 
-                local strafeDir = CFG.strafeDirection or 1
-                strafeAngle = strafeAngle + (strafeDir * (effectiveSpeed / effectiveRadius) * dt)
+                if curDist >= 0.2 then
+                    isStrafing = true
+                    local toTarget = diff.Unit
+                    local strafeDir = CFG.strafeDirection or 1
+                    local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 12.0, 18.2) or CFG.strafeSpeed
+                    local effectiveRadius = math.clamp(CFG.strafeRadius, 3.0, 8.0)
 
-                local goalX = tRoot.Position.X + math.cos(strafeAngle) * effectiveRadius
-                local goalZ = tRoot.Position.Z + math.sin(strafeAngle) * effectiveRadius
-                local goalPos = Vector3.new(goalX, root.Position.Y, goalZ)
+                    -- Tangent perpendicular vector (cross product around enemy)
+                    local tangent = Vector3.new(-toTarget.Z, 0, toTarget.X) * strafeDir
 
-                -- Smooth Argon 4 style orbit lerp
-                local newPos = root.Position:Lerp(goalPos, math.clamp(effectiveSpeed * dt * 2.0, 0.25, 1.0))
-                root.CFrame = CFrame.lookAt(newPos, Vector3.new(tRoot.Position.X, newPos.Y, tRoot.Position.Z))
+                    -- Radial steering: smoothly pull inward if too far, push outward if too close
+                    local distError = curDist - effectiveRadius
+                    local steerWeight = math.clamp(distError / 2.5, -1.0, 1.0)
+                    local steerDir = toTarget * steerWeight
 
-                local toGoal = (goalPos - root.Position)
-                if toGoal.Magnitude > 0.05 then
-                    local u = toGoal.Unit
-                    root.AssemblyLinearVelocity = Vector3.new(u.X * effectiveSpeed, root.AssemblyLinearVelocity.Y, u.Z * effectiveSpeed)
-                end
+                    -- Composite move direction (smoothly blended unit vector)
+                    local moveDir = (tangent * (1 - math.abs(steerWeight) * 0.45) + steerDir).Unit
 
-                -- Wall collision check (auto-reverses direction like Argon 4)
-                local rayP = RaycastParams.new()
-                rayP.FilterType = Enum.RaycastFilterType.Exclude
-                rayP.FilterDescendantsInstances = { c, strafeTarget }
-                local wallHit = workspace:Raycast(root.Position, (goalPos - root.Position).Unit * 2.5, rayP)
-                if wallHit and wallHit.Instance and wallHit.Instance.CanCollide then
-                    CFG.strafeDirection = -(CFG.strafeDirection or 1)
-                end
+                    -- Frame displacement strictly clamped to effectiveSpeed * dt (NO SNAPPING / RUBBERBANDING!)
+                    local step = moveDir * (effectiveSpeed * dt)
 
-                -- Auto bhop while strafing
-                if hum.FloorMaterial ~= Enum.Material.Air then
-                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    -- Smooth yaw facing enemy
+                    local lookAngle = math.atan2(-toTarget.X, -toTarget.Z)
+                    root.CFrame = CFrame.new(root.Position + step) * CFrame.Angles(0, lookAngle, 0)
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * effectiveSpeed, root.AssemblyLinearVelocity.Y, moveDir.Z * effectiveSpeed)
+
+                    -- Wall collision check (auto-reverses direction on wall hit)
+                    local rayP = RaycastParams.new()
+                    rayP.FilterType = Enum.RaycastFilterType.Exclude
+                    rayP.FilterDescendantsInstances = { c, strafeTarget }
+                    local wallHit = workspace:Raycast(root.Position, moveDir * 2.2, rayP)
+                    if wallHit and wallHit.Instance and wallHit.Instance.CanCollide then
+                        CFG.strafeDirection = -(CFG.strafeDirection or 1)
+                    end
+
+                    -- Auto bhop while strafing
+                    if hum.FloorMaterial ~= Enum.Material.Air then
+                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                        hum.Jump = true
+                    end
                 end
             end
         else
@@ -2955,10 +2962,10 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
             local isEatingOrBlocking = c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted")
 
             if horiz.Magnitude > 0.05 then
-                local baseSpd = CFG.speedEnabled and CFG.speedValue or 20.2
-                local spd = CFG.acSafeSpeed and math.clamp(baseSpd, 14.0, 20.4) or baseSpd
+                local baseSpd = CFG.speedEnabled and CFG.speedValue or 18.2
+                local spd = CFG.acSafeSpeed and math.clamp(baseSpd, 14.0, 18.5) or baseSpd
                 if not CFG.speedEnabled and CFG.noSlowdown and isEatingOrBlocking then
-                    spd = 18.5
+                    spd = 18.0
                 end
 
                 if CFG.speedEnabled or (CFG.noSlowdown and isEatingOrBlocking) then
