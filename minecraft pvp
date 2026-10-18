@@ -1146,6 +1146,11 @@ targetHighlight.Parent = getGuiContainer()
 -- ========================================================================
 -- 🖥️ KEYBINDS HUD + HVH TOGGLE NOTIFICATIONS (MATCHING SCREENSHOT)
 -- ========================================================================
+local oldHud = lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("MidHub_KeybindsHUD")
+if oldHud then
+    pcall(function() oldHud:Destroy() end)
+end
+
 local hudGui = Instance.new("ScreenGui")
 hudGui.Name = "MidHub_KeybindsHUD"
 hudGui.ResetOnSpawn = false
@@ -1295,115 +1300,219 @@ local function showToggleNotification(moduleName, stateBool, keyEnum)
     end)
 end
 
--- Main Keybinds HUD Frame (Matching uploaded reference image)
+-- ========================================================================
+-- 🖥️ MODERN SLEEK KEYBINDS HUD (NEVERLOSE / ARGON HVH STYLE)
+-- ========================================================================
+local function formatKeycapText(keyCode)
+    if not keyCode or keyCode == Enum.KeyCode.Unknown then
+        return "[ NONE ]"
+    end
+    local name = formatKeyName(keyCode)
+    if not name or name == "" or name == "None" then
+        return "[ NONE ]"
+    end
+    return "[ " .. name:upper() .. " ]"
+end
+
+-- Outer Floating Container (Holds drop shadow backdrop + main card in lockstep)
 local keybindsFrame = Instance.new("Frame")
-keybindsFrame.Name = "KeybindsCard"
-keybindsFrame.Position = UDim2.fromOffset(18, 120)
-keybindsFrame.Size = UDim2.fromOffset(248, 396)
-keybindsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 21)
-keybindsFrame.BackgroundTransparency = 0.04
+keybindsFrame.Name = "KeybindsContainer"
+keybindsFrame.Position = UDim2.fromOffset(20, 115)
+keybindsFrame.Size = UDim2.fromOffset(264, 400)
+keybindsFrame.BackgroundTransparency = 1
 keybindsFrame.BorderSizePixel = 0
-keybindsFrame.ClipsDescendants = true
 keybindsFrame.Parent = hudGui
+
+-- Soft Outer Drop Shadow Backing
+local kbShadow = Instance.new("Frame")
+kbShadow.Name = "ShadowBacking"
+kbShadow.Position = UDim2.fromOffset(-7, -7)
+kbShadow.Size = UDim2.new(1, 14, 1, 14)
+kbShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+kbShadow.BackgroundTransparency = 0.65
+kbShadow.BorderSizePixel = 0
+kbShadow.ZIndex = 1
+kbShadow.Parent = keybindsFrame
+
+local kbShadowCorner = Instance.new("UICorner")
+kbShadowCorner.CornerRadius = UDim.new(0, 16)
+kbShadowCorner.Parent = kbShadow
+
+-- Deep Onyx Glassmorphic Main Card
+local kbCard = Instance.new("Frame")
+kbCard.Name = "KeybindsCard"
+kbCard.Size = UDim2.fromScale(1, 1)
+kbCard.BackgroundColor3 = Color3.fromRGB(13, 13, 18)
+kbCard.BackgroundTransparency = 0.04
+kbCard.BorderSizePixel = 0
+kbCard.ClipsDescendants = true
+kbCard.ZIndex = 2
+kbCard.Parent = keybindsFrame
 
 local kbCorner = Instance.new("UICorner")
 kbCorner.CornerRadius = UDim.new(0, 12)
-kbCorner.Parent = keybindsFrame
+kbCorner.Parent = kbCard
 
 local kbStroke = Instance.new("UIStroke")
-kbStroke.Color = Color3.fromRGB(98, 76, 218)
-kbStroke.Thickness = 1.6
-kbStroke.Transparency = 0.1
-kbStroke.Parent = keybindsFrame
+kbStroke.Color = Color3.fromRGB(36, 35, 48)
+kbStroke.Thickness = 1.2
+kbStroke.Parent = kbCard
 
--- Top Header Bar
+-- Sleek 38px Header Bar
 local headerBar = Instance.new("Frame")
 headerBar.Name = "HeaderBar"
-headerBar.Size = UDim2.new(1, 0, 0, 34)
-headerBar.BackgroundColor3 = Color3.fromRGB(36, 28, 78)
+headerBar.Size = UDim2.new(1, 0, 0, 38)
+headerBar.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
 headerBar.BorderSizePixel = 0
-headerBar.Parent = keybindsFrame
+headerBar.ZIndex = 3
+headerBar.Parent = kbCard
 
 local headerCorner = Instance.new("UICorner")
 headerCorner.CornerRadius = UDim.new(0, 12)
 headerCorner.Parent = headerBar
 
-local headerSquareFix = Instance.new("Frame")
-headerSquareFix.Size = UDim2.new(1, 0, 0, 10)
-headerSquareFix.Position = UDim2.new(0, 0, 1, -10)
-headerSquareFix.BackgroundColor3 = Color3.fromRGB(36, 28, 78)
-headerSquareFix.BorderSizePixel = 0
-headerSquareFix.Parent = headerBar
+local headerHairline = Instance.new("Frame")
+headerHairline.Name = "Hairline"
+headerHairline.Size = UDim2.new(1, 0, 0, 1)
+headerHairline.Position = UDim2.new(0, 0, 1, -1)
+headerHairline.BackgroundColor3 = Color3.fromRGB(28, 27, 38)
+headerHairline.BorderSizePixel = 0
+headerHairline.ZIndex = 4
+headerHairline.Parent = headerBar
 
-local purpleDot = Instance.new("Frame")
-purpleDot.Size = UDim2.fromOffset(10, 10)
-purpleDot.Position = UDim2.fromOffset(12, 12)
-purpleDot.BackgroundColor3 = Color3.fromRGB(139, 92, 246)
-purpleDot.BorderSizePixel = 0
-purpleDot.Parent = headerBar
+-- Illuminated Header Icon Pill
+local headerIconPill = Instance.new("Frame")
+headerIconPill.Name = "IconPill"
+headerIconPill.Size = UDim2.fromOffset(22, 22)
+headerIconPill.Position = UDim2.fromOffset(10, 8)
+headerIconPill.BackgroundColor3 = Color3.fromRGB(30, 26, 50)
+headerIconPill.BorderSizePixel = 0
+headerIconPill.ZIndex = 5
+headerIconPill.Parent = headerBar
 
-local dotCorner = Instance.new("UICorner")
-dotCorner.CornerRadius = UDim.new(1, 0)
-dotCorner.Parent = purpleDot
+local hipCorner = Instance.new("UICorner")
+hipCorner.CornerRadius = UDim.new(0, 6)
+hipCorner.Parent = headerIconPill
 
+local hipStroke = Instance.new("UIStroke")
+hipStroke.Color = Color3.fromRGB(115, 90, 235)
+hipStroke.Thickness = 1
+hipStroke.Parent = headerIconPill
+
+local headerIconTxt = Instance.new("TextLabel")
+headerIconTxt.Size = UDim2.fromScale(1, 1)
+headerIconTxt.BackgroundTransparency = 1
+headerIconTxt.Font = Enum.Font.GothamBold
+headerIconTxt.TextSize = 12
+headerIconTxt.TextColor3 = Color3.fromRGB(180, 160, 255)
+headerIconTxt.Text = "⚡"
+headerIconTxt.ZIndex = 6
+headerIconTxt.Parent = headerIconPill
+
+-- Title Label
 local headerTitle = Instance.new("TextLabel")
-headerTitle.Size = UDim2.fromOffset(110, 34)
-headerTitle.Position = UDim2.fromOffset(28, 0)
+headerTitle.Name = "Title"
+headerTitle.Size = UDim2.fromOffset(80, 38)
+headerTitle.Position = UDim2.fromOffset(38, 0)
 headerTitle.BackgroundTransparency = 1
 headerTitle.Font = Enum.Font.GothamBold
-headerTitle.TextSize = 13
-headerTitle.TextColor3 = Color3.fromRGB(242, 240, 255)
+headerTitle.TextSize = 12
+headerTitle.TextColor3 = Color3.fromRGB(240, 240, 252)
 headerTitle.TextXAlignment = Enum.TextXAlignment.Left
 headerTitle.Text = "KEYBINDS"
+headerTitle.ZIndex = 5
 headerTitle.Parent = headerBar
 
-local dragHint = Instance.new("TextLabel")
-dragHint.Size = UDim2.fromOffset(40, 34)
-dragHint.Position = UDim2.new(1, -74, 0, 0)
-dragHint.BackgroundTransparency = 1
-dragHint.Font = Enum.Font.Gotham
-dragHint.TextSize = 11
-dragHint.TextColor3 = Color3.fromRGB(165, 158, 205)
-dragHint.TextXAlignment = Enum.TextXAlignment.Right
-dragHint.Text = "drag"
-dragHint.Parent = headerBar
+-- Dynamic Active Module Counter Badge
+local activeBadge = Instance.new("Frame")
+activeBadge.Name = "ActiveBadge"
+activeBadge.Size = UDim2.fromOffset(54, 20)
+activeBadge.Position = UDim2.fromOffset(120, 9)
+activeBadge.BackgroundColor3 = Color3.fromRGB(22, 21, 30)
+activeBadge.BorderSizePixel = 0
+activeBadge.ZIndex = 5
+activeBadge.Parent = headerBar
 
+local badgeCorner = Instance.new("UICorner")
+badgeCorner.CornerRadius = UDim.new(1, 0)
+badgeCorner.Parent = activeBadge
+
+local badgeStroke = Instance.new("UIStroke")
+badgeStroke.Color = Color3.fromRGB(38, 36, 50)
+badgeStroke.Thickness = 1
+badgeStroke.Parent = activeBadge
+
+local activeBadgeTxt = Instance.new("TextLabel")
+activeBadgeTxt.Size = UDim2.fromScale(1, 1)
+activeBadgeTxt.BackgroundTransparency = 1
+activeBadgeTxt.Font = Enum.Font.GothamBold
+activeBadgeTxt.TextSize = 10
+activeBadgeTxt.TextColor3 = Color3.fromRGB(135, 132, 155)
+activeBadgeTxt.Text = "0 ON"
+activeBadgeTxt.ZIndex = 6
+activeBadgeTxt.Parent = activeBadge
+
+-- Minimize Button (— / +)
 local minBtn = Instance.new("TextButton")
 minBtn.Name = "MinimizeBtn"
-minBtn.Size = UDim2.fromOffset(24, 22)
-minBtn.Position = UDim2.new(1, -30, 0, 6)
-minBtn.BackgroundColor3 = Color3.fromRGB(58, 48, 112)
+minBtn.Size = UDim2.fromOffset(22, 22)
+minBtn.Position = UDim2.new(1, -30, 0, 8)
+minBtn.BackgroundColor3 = Color3.fromRGB(24, 23, 33)
 minBtn.BorderSizePixel = 0
 minBtn.Font = Enum.Font.GothamBold
-minBtn.TextSize = 14
-minBtn.TextColor3 = Color3.fromRGB(235, 232, 255)
-minBtn.Text = "-"
+minBtn.TextSize = 13
+minBtn.TextColor3 = Color3.fromRGB(200, 196, 220)
+minBtn.Text = "—"
+minBtn.ZIndex = 5
 minBtn.Parent = headerBar
 
 local minCorner = Instance.new("UICorner")
 minCorner.CornerRadius = UDim.new(0, 6)
 minCorner.Parent = minBtn
 
--- Rows Container
+local minStroke = Instance.new("UIStroke")
+minStroke.Color = Color3.fromRGB(40, 38, 56)
+minStroke.Thickness = 1
+minStroke.Parent = minBtn
+
+minBtn.MouseEnter:Connect(function()
+    TweenService:Create(minBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = Color3.fromRGB(36, 34, 48)
+    }):Play()
+    TweenService:Create(minStroke, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Color = Color3.fromRGB(60, 56, 80)
+    }):Play()
+end)
+minBtn.MouseLeave:Connect(function()
+    TweenService:Create(minBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = Color3.fromRGB(24, 23, 33)
+    }):Play()
+    TweenService:Create(minStroke, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Color = Color3.fromRGB(40, 38, 56)
+    }):Play()
+end)
+
+-- Scrolling Rows Container
 local rowsHolder = Instance.new("ScrollingFrame")
 rowsHolder.Name = "RowsHolder"
-rowsHolder.Position = UDim2.fromOffset(8, 40)
-rowsHolder.Size = UDim2.new(1, -16, 1, -48)
+rowsHolder.Position = UDim2.fromOffset(8, 44)
+rowsHolder.Size = UDim2.new(1, -16, 1, -50)
 rowsHolder.BackgroundTransparency = 1
 rowsHolder.BorderSizePixel = 0
 rowsHolder.ScrollBarThickness = 2
 rowsHolder.ScrollBarImageColor3 = Color3.fromRGB(115, 90, 235)
 rowsHolder.CanvasSize = UDim2.new(0, 0, 0, 0)
 rowsHolder.AutomaticCanvasSize = Enum.AutomaticSize.Y
-rowsHolder.Parent = keybindsFrame
+rowsHolder.ZIndex = 4
+rowsHolder.Parent = kbCard
 
 local rowsLayout = Instance.new("UIListLayout")
 rowsLayout.FillDirection = Enum.FillDirection.Vertical
 rowsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-rowsLayout.Padding = UDim.new(0, 5)
+rowsLayout.Padding = UDim.new(0, 4)
 rowsLayout.Parent = rowsHolder
 
--- Make Keybinds HUD draggable
+-- Make Keybinds HUD Draggable
 do
     local dragging = false
     local dragStart = nil
@@ -1444,16 +1553,40 @@ local MODULES = {}
 local MODULE_ORDER = {}
 local activeRebindModule = nil
 
+local function updateActiveBadge()
+    local count = 0
+    for _, mod in ipairs(MODULE_ORDER) do
+        if CFG[mod.cfgKey] == true then
+            count = count + 1
+        end
+    end
+    task.spawn(function()
+        pcall(function()
+            if count > 0 then
+                activeBadgeTxt.Text = count .. " ON"
+                activeBadgeTxt.TextColor3 = Color3.fromRGB(52, 211, 153)
+                badgeStroke.Color = Color3.fromRGB(34, 197, 94)
+                activeBadge.BackgroundColor3 = Color3.fromRGB(20, 36, 28)
+            else
+                activeBadgeTxt.Text = "0 ON"
+                activeBadgeTxt.TextColor3 = Color3.fromRGB(135, 132, 155)
+                badgeStroke.Color = Color3.fromRGB(38, 36, 50)
+                activeBadge.BackgroundColor3 = Color3.fromRGB(22, 21, 30)
+            end
+        end)
+    end)
+end
+
 local function updateHudHeight(collapsed)
     if collapsed then
-        TweenService:Create(keybindsFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(248, 34)
+        TweenService:Create(keybindsFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(264, 38)
         }):Play()
     else
         local totalRows = #MODULE_ORDER + 1 -- +1 for Show/hide menu row
-        local targetH = math.clamp(44 + totalRows * 33, 180, 465)
-        TweenService:Create(keybindsFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(248, targetH)
+        local targetH = math.clamp(48 + totalRows * 34, 180, 480)
+        TweenService:Create(keybindsFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(264, targetH)
         }):Play()
     end
 end
@@ -1461,60 +1594,135 @@ end
 local isHudCollapsed = false
 minBtn.MouseButton1Click:Connect(function()
     isHudCollapsed = not isHudCollapsed
-    minBtn.Text = isHudCollapsed and "+" or "-"
+    minBtn.Text = isHudCollapsed and "+" or "—"
     updateHudHeight(isHudCollapsed)
 end)
 
 -- Create top row: Show / hide menu
 local menuKeyPillBtn = nil
+local menuKeyBtnStroke = nil
 do
     local row = Instance.new("Frame")
     row.Name = "Row_MenuToggle"
     row.LayoutOrder = 0
-    row.Size = UDim2.new(1, 0, 0, 28)
-    row.BackgroundColor3 = Color3.fromRGB(23, 22, 32)
+    row.Size = UDim2.new(1, 0, 0, 30)
+    row.BackgroundColor3 = Color3.fromRGB(18, 17, 24)
     row.BorderSizePixel = 0
+    row.ZIndex = 5
     row.Parent = rowsHolder
 
     local rc = Instance.new("UICorner")
     rc.CornerRadius = UDim.new(0, 7)
     rc.Parent = row
 
+    local rowStroke = Instance.new("UIStroke")
+    rowStroke.Color = Color3.fromRGB(28, 27, 38)
+    rowStroke.Thickness = 1
+    rowStroke.Parent = row
+
     local keyBtn = Instance.new("TextButton")
-    keyBtn.Size = UDim2.fromOffset(66, 22)
-    keyBtn.Position = UDim2.fromOffset(4, 3)
-    keyBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
+    keyBtn.Size = UDim2.fromOffset(72, 22)
+    keyBtn.Position = UDim2.fromOffset(4, 4)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
     keyBtn.BorderSizePixel = 0
     keyBtn.Font = Enum.Font.GothamBold
-    keyBtn.TextSize = 11
-    keyBtn.TextColor3 = Color3.fromRGB(240, 238, 255)
-    keyBtn.Text = formatKeyName(CFG.menuKeybind)
+    keyBtn.TextSize = 10
+    keyBtn.TextColor3 = Color3.fromRGB(200, 196, 225)
+    keyBtn.Text = formatKeycapText(CFG.menuKeybind)
+    keyBtn.ZIndex = 6
     keyBtn.Parent = row
     menuKeyPillBtn = keyBtn
 
     local kc = Instance.new("UICorner")
-    kc.CornerRadius = UDim.new(0, 6)
+    kc.CornerRadius = UDim.new(0, 5)
     kc.Parent = keyBtn
 
+    menuKeyBtnStroke = Instance.new("UIStroke")
+    menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+    menuKeyBtnStroke.Thickness = 1
+    menuKeyBtnStroke.Parent = keyBtn
+
     local nameLbl = Instance.new("TextLabel")
-    nameLbl.Size = UDim2.new(1, -80, 1, 0)
-    nameLbl.Position = UDim2.fromOffset(76, 0)
+    nameLbl.Size = UDim2.new(1, -145, 1, 0)
+    nameLbl.Position = UDim2.fromOffset(82, 0)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Font = Enum.Font.GothamMedium
-    nameLbl.TextSize = 12
-    nameLbl.TextColor3 = Color3.fromRGB(215, 212, 235)
+    nameLbl.TextSize = 11.5
+    nameLbl.TextColor3 = Color3.fromRGB(220, 218, 235)
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-    nameLbl.Text = "Show / hide UI"
+    nameLbl.Text = "MidHub Menu UI"
+    nameLbl.ZIndex = 6
     nameLbl.Parent = row
+
+    local menuBadge = Instance.new("Frame")
+    menuBadge.AnchorPoint = Vector2.new(1, 0.5)
+    menuBadge.Position = UDim2.new(1, -8, 0.5, 0)
+    menuBadge.Size = UDim2.fromOffset(48, 18)
+    menuBadge.BackgroundColor3 = Color3.fromRGB(26, 24, 36)
+    menuBadge.BorderSizePixel = 0
+    menuBadge.ZIndex = 6
+    menuBadge.Parent = row
+
+    local mbc = Instance.new("UICorner")
+    mbc.CornerRadius = UDim.new(1, 0)
+    mbc.Parent = menuBadge
+
+    local mbStroke = Instance.new("UIStroke")
+    mbStroke.Color = Color3.fromRGB(44, 42, 60)
+    mbStroke.Thickness = 1
+    mbStroke.Parent = menuBadge
+
+    local menuBadgeTxt = Instance.new("TextLabel")
+    menuBadgeTxt.Size = UDim2.fromScale(1, 1)
+    menuBadgeTxt.BackgroundTransparency = 1
+    menuBadgeTxt.Font = Enum.Font.GothamBold
+    menuBadgeTxt.TextSize = 9
+    menuBadgeTxt.TextColor3 = Color3.fromRGB(150, 146, 175)
+    menuBadgeTxt.Text = "MENU"
+    menuBadgeTxt.ZIndex = 7
+    menuBadgeTxt.Parent = menuBadge
+
+    row.MouseEnter:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(23, 22, 31)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(38, 36, 52)
+        }):Play()
+    end)
+    row.MouseLeave:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(18, 17, 24)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(28, 27, 38)
+        }):Play()
+    end)
+
+    keyBtn.MouseEnter:Connect(function()
+        if activeRebindModule ~= "__MENU__" then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(34, 32, 48)
+            }):Play()
+        end
+    end)
+    keyBtn.MouseLeave:Connect(function()
+        if activeRebindModule ~= "__MENU__" then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+            }):Play()
+        end
+    end)
 
     keyBtn.MouseButton1Click:Connect(function()
         activeRebindModule = "__MENU__"
-        keyBtn.Text = "..."
+        keyBtn.Text = "[ ... ]"
         keyBtn.BackgroundColor3 = Color3.fromRGB(115, 90, 235)
+        menuKeyBtnStroke.Color = Color3.fromRGB(168, 85, 247)
     end)
 end
 
--- Register a bindable module with its HUD row, default key, state getter/setter
+-- Register a bindable module with modern row tile, keycap pill, and animated capsule switch
 local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, onChangeCallback)
     local mod = {
         id = id,
@@ -1524,7 +1732,11 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
         onChange = onChangeCallback,
         macToggle = nil,
         keyBtn = nil,
-        statusBtn = nil,
+        keyBtnStroke = nil,
+        nameLbl = nil,
+        switchBtn = nil,
+        switchStroke = nil,
+        thumbCircle = nil,
     }
     MODULES[id] = mod
     table.insert(MODULE_ORDER, mod)
@@ -1532,74 +1744,169 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
     local row = Instance.new("Frame")
     row.Name = "Row_" .. id
     row.LayoutOrder = #MODULE_ORDER
-    row.Size = UDim2.new(1, 0, 0, 28)
-    row.BackgroundColor3 = Color3.fromRGB(23, 22, 32)
+    row.Size = UDim2.new(1, 0, 0, 30)
+    row.BackgroundColor3 = Color3.fromRGB(18, 17, 24)
     row.BorderSizePixel = 0
+    row.ZIndex = 5
     row.Parent = rowsHolder
 
     local rc = Instance.new("UICorner")
     rc.CornerRadius = UDim.new(0, 7)
     rc.Parent = row
 
+    local rowStroke = Instance.new("UIStroke")
+    rowStroke.Color = Color3.fromRGB(28, 27, 38)
+    rowStroke.Thickness = 1
+    rowStroke.Parent = row
+
+    -- Mechanical Keycap Pill
     local keyBtn = Instance.new("TextButton")
-    keyBtn.Size = UDim2.fromOffset(66, 22)
-    keyBtn.Position = UDim2.fromOffset(4, 3)
-    keyBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
+    keyBtn.Size = UDim2.fromOffset(72, 22)
+    keyBtn.Position = UDim2.fromOffset(4, 4)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
     keyBtn.BorderSizePixel = 0
     keyBtn.Font = Enum.Font.GothamBold
-    keyBtn.TextSize = 11
-    keyBtn.TextColor3 = Color3.fromRGB(240, 238, 255)
-    keyBtn.Text = formatKeyName(defaultKeyCode)
+    keyBtn.TextSize = 10
+    keyBtn.TextColor3 = Color3.fromRGB(200, 196, 225)
+    keyBtn.Text = formatKeycapText(defaultKeyCode)
+    keyBtn.ZIndex = 6
     keyBtn.Parent = row
     mod.keyBtn = keyBtn
 
     local kc = Instance.new("UICorner")
-    kc.CornerRadius = UDim.new(0, 6)
+    kc.CornerRadius = UDim.new(0, 5)
     kc.Parent = keyBtn
 
+    local keyStroke = Instance.new("UIStroke")
+    keyStroke.Color = Color3.fromRGB(44, 42, 60)
+    keyStroke.Thickness = 1
+    keyStroke.Parent = keyBtn
+    mod.keyBtnStroke = keyStroke
+
+    -- Module Title Label
     local nameLbl = Instance.new("TextLabel")
-    nameLbl.Size = UDim2.new(1, -130, 1, 0)
-    nameLbl.Position = UDim2.fromOffset(76, 0)
+    nameLbl.Size = UDim2.new(1, -132, 1, 0)
+    nameLbl.Position = UDim2.fromOffset(82, 0)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Font = Enum.Font.GothamMedium
-    nameLbl.TextSize = 12
-    nameLbl.TextColor3 = Color3.fromRGB(232, 230, 245)
+    nameLbl.TextSize = 11.5
+    nameLbl.TextColor3 = Color3.fromRGB(185, 182, 202)
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
     nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
     nameLbl.Text = displayName
+    nameLbl.ZIndex = 6
     nameLbl.Parent = row
+    mod.nameLbl = nameLbl
 
-    local statusBtn = Instance.new("TextButton")
-    statusBtn.AnchorPoint = Vector2.new(1, 0.5)
-    statusBtn.Position = UDim2.new(1, -5, 0.5, 0)
-    statusBtn.Size = UDim2.fromOffset(44, 20)
-    statusBtn.BorderSizePixel = 0
-    statusBtn.Font = Enum.Font.GothamBold
-    statusBtn.TextSize = 10
-    statusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    statusBtn.Parent = row
-    mod.statusBtn = statusBtn
+    -- Modern Capsule Toggle Switch
+    local switchBtn = Instance.new("TextButton")
+    switchBtn.Name = "SwitchBtn"
+    switchBtn.AnchorPoint = Vector2.new(1, 0.5)
+    switchBtn.Position = UDim2.new(1, -8, 0.5, 0)
+    switchBtn.Size = UDim2.fromOffset(36, 18)
+    switchBtn.BackgroundColor3 = Color3.fromRGB(28, 27, 38)
+    switchBtn.BorderSizePixel = 0
+    switchBtn.AutoButtonColor = false
+    switchBtn.Text = ""
+    switchBtn.ZIndex = 6
+    switchBtn.Parent = row
+    mod.switchBtn = switchBtn
 
-    local sc = Instance.new("UICorner")
-    sc.CornerRadius = UDim.new(1, 0)
-    sc.Parent = statusBtn
+    local swCorner = Instance.new("UICorner")
+    swCorner.CornerRadius = UDim.new(1, 0)
+    swCorner.Parent = switchBtn
+
+    local swStroke = Instance.new("UIStroke")
+    swStroke.Color = Color3.fromRGB(44, 42, 60)
+    swStroke.Thickness = 1
+    swStroke.Parent = switchBtn
+    mod.switchStroke = swStroke
+
+    local thumb = Instance.new("Frame")
+    thumb.Name = "Thumb"
+    thumb.Size = UDim2.fromOffset(12, 12)
+    thumb.Position = UDim2.fromOffset(3, 3)
+    thumb.BackgroundColor3 = Color3.fromRGB(120, 116, 140)
+    thumb.BorderSizePixel = 0
+    thumb.ZIndex = 7
+    thumb.Parent = switchBtn
+    mod.thumbCircle = thumb
+
+    local thCorner = Instance.new("UICorner")
+    thCorner.CornerRadius = UDim.new(1, 0)
+    thCorner.Parent = thumb
+
+    -- Tile hover effect
+    row.MouseEnter:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(23, 22, 31)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(38, 36, 52)
+        }):Play()
+    end)
+    row.MouseLeave:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(18, 17, 24)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(28, 27, 38)
+        }):Play()
+    end)
+
+    keyBtn.MouseEnter:Connect(function()
+        if activeRebindModule ~= mod then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(34, 32, 48)
+            }):Play()
+        end
+    end)
+    keyBtn.MouseLeave:Connect(function()
+        if activeRebindModule ~= mod then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+            }):Play()
+        end
+    end)
 
     function mod:RefreshHudVisuals()
         local isOn = CFG[self.cfgKey] == true
         task.spawn(function()
             pcall(function()
                 if self.keyBtn and self.keyBtn.Parent then
-                    self.keyBtn.Text = formatKeyName(self.key)
-                    self.keyBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
+                    self.keyBtn.Text = formatKeycapText(self.key)
+                    self.keyBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                    if self.keyBtnStroke then
+                        self.keyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                    end
                 end
-                if self.statusBtn and self.statusBtn.Parent then
-                    self.statusBtn.Text = isOn and "ON" or "OFF"
-                    self.statusBtn.BackgroundColor3 = isOn
-                        and Color3.fromRGB(40, 165, 95)
-                        or Color3.fromRGB(138, 42, 52)
+                if self.nameLbl and self.nameLbl.Parent then
+                    self.nameLbl.TextColor3 = isOn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(185, 182, 202)
+                end
+                if self.switchBtn and self.switchBtn.Parent then
+                    local targetBg = isOn and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(28, 27, 38)
+                    local targetStroke = isOn and Color3.fromRGB(74, 222, 128) or Color3.fromRGB(44, 42, 60)
+                    local targetThumbPos = isOn and UDim2.fromOffset(21, 3) or UDim2.fromOffset(3, 3)
+                    local targetThumbColor = isOn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(120, 116, 140)
+
+                    TweenService:Create(self.switchBtn, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        BackgroundColor3 = targetBg
+                    }):Play()
+                    if self.switchStroke then
+                        TweenService:Create(self.switchStroke, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                            Color = targetStroke
+                        }):Play()
+                    end
+                    if self.thumbCircle then
+                        TweenService:Create(self.thumbCircle, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                            Position = targetThumbPos,
+                            BackgroundColor3 = targetThumbColor
+                        }):Play()
+                    end
                 end
             end)
         end)
+        updateActiveBadge()
     end
 
     local suppressReentrant = false
@@ -1627,11 +1934,12 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
 
     keyBtn.MouseButton1Click:Connect(function()
         activeRebindModule = mod
-        keyBtn.Text = "..."
+        keyBtn.Text = "[ ... ]"
         keyBtn.BackgroundColor3 = Color3.fromRGB(115, 90, 235)
+        keyStroke.Color = Color3.fromRGB(168, 85, 247)
     end)
 
-    statusBtn.MouseButton1Click:Connect(function()
+    switchBtn.MouseButton1Click:Connect(function()
         mod:SetState(not CFG[mod.cfgKey], false)
     end)
 
@@ -1677,14 +1985,20 @@ trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     activeRebindModule.key = Enum.KeyCode.Unknown
                     activeRebindModule:RefreshHudVisuals()
                 else
-                    menuKeyPillBtn.Text = formatKeyName(CFG.menuKeybind)
-                    menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
+                    menuKeyPillBtn.Text = formatKeycapText(CFG.menuKeybind)
+                    menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                    if menuKeyBtnStroke then
+                        menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                    end
                 end
             else
                 if activeRebindModule == "__MENU__" then
                     CFG.menuKeybind = kc
-                    menuKeyPillBtn.Text = formatKeyName(kc)
-                    menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(52, 42, 108)
+                    menuKeyPillBtn.Text = formatKeycapText(kc)
+                    menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                    if menuKeyBtnStroke then
+                        menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                    end
                     if Window and Window.SetKeybind then
                         pcall(function() Window:SetKeybind(kc) end)
                     end
