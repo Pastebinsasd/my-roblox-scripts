@@ -481,11 +481,14 @@ local CFG = {
     scaffoldEnabled   = false,
     autoBreakTrap     = false,
 
-    -- Movement & Velocity (Anti-KB & No Jump Delay)
+    -- Movement & Velocity (Anti-KB, NoSlow, Anti-Lava & Anti-Void)
     antiKnockback     = true,
     kbHorizontalPct   = 0,
     kbVerticalPct     = 0,
     noSlowdown        = true,
+    antiLava          = true,
+    antiVoid          = true,
+    antiVoidMode      = "Teleport",
     speedEnabled      = false,
     speedValue        = 18.2,
     noJumpDelay       = true,
@@ -566,6 +569,55 @@ local function updateNoSlowPatches()
     end
 end
 updateNoSlowPatches()
+
+-- ========================================================================
+-- 🌋 ANTI-LAVA & 🕳️ ANTI-VOID SYSTEM
+-- ========================================================================
+local antiLavaBarrier = nil
+local function updateAntiLavaState()
+    if not CFG.antiLava then
+        if antiLavaBarrier and antiLavaBarrier.Parent then
+            pcall(function() antiLavaBarrier:Destroy() end)
+            antiLavaBarrier = nil
+        end
+        return
+    end
+
+    local courtyard = workspace:FindFirstChild("OvergrownCourtyard")
+    local lavaPool = courtyard and courtyard:FindFirstChild("LavaPool")
+    local lavaPart = lavaPool and lavaPool:FindFirstChild("Lava")
+    if not lavaPart then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Name == "Lava" and obj.Size.Y > 2 then
+                lavaPart = obj
+                break
+            end
+        end
+    end
+
+    if lavaPart and lavaPart.Parent then
+        if not antiLavaBarrier or not antiLavaBarrier.Parent then
+            local b = Instance.new("Part")
+            b.Name = "MidHub_AntiLavaBarrier"
+            b.Size = Vector3.new(lavaPart.Size.X + 0.8, 0.4, lavaPart.Size.Z + 0.8)
+            b.Position = Vector3.new(lavaPart.Position.X, lavaPart.Position.Y + lavaPart.Size.Y / 2 + 0.2, lavaPart.Position.Z)
+            b.Transparency = 1
+            b.CanCollide = true
+            b.Anchored = true
+            b.Parent = workspace
+            antiLavaBarrier = b
+        else
+            antiLavaBarrier.Position = Vector3.new(lavaPart.Position.X, lavaPart.Position.Y + lavaPart.Size.Y / 2 + 0.2, lavaPart.Position.Z)
+            antiLavaBarrier.Size = Vector3.new(lavaPart.Size.X + 0.8, 0.4, lavaPart.Size.Z + 0.8)
+            antiLavaBarrier.CanCollide = true
+        end
+    end
+end
+updateAntiLavaState()
+
+local lastSafeGroundCFrame = nil
+local lastSafeGroundTime = 0
+local lastAntiVoidTrigger = 0
 
 -- ========================================================================
 -- 🔗 GC UPVALUE SYNC (PERFORMATTACK SEQ & BUILDING PLACE SEQ)
@@ -1968,6 +2020,10 @@ local ModAutoGapple   = registerBindableModule("AutoGapple",   "Auto Gapple",   
 local ModBowAim       = registerBindableModule("BowAim",       "Silent Bow Aim",   "bowAimbot",       Enum.KeyCode.Unknown, nil)
 local ModThirdPerson  = registerBindableModule("ThirdPerson",  "3rd Person HvH",   "thirdPersonHvH",  Enum.KeyCode.Unknown, setThirdPersonView)
 local ModESP          = registerBindableModule("ESP",          "Player ESP",       "espEnabled",      Enum.KeyCode.Unknown, nil)
+local ModAntiLava     = registerBindableModule("AntiLava",     "Anti Lava",        "antiLava",        Enum.KeyCode.Unknown, function(v)
+    updateAntiLavaState()
+end)
+local ModAntiVoid     = registerBindableModule("AntiVoid",     "Anti Void",        "antiVoid",        Enum.KeyCode.Unknown, nil)
 
 updateHudHeight(false)
 
@@ -2679,6 +2735,20 @@ VelSec:Toggle({
     end
 })
 
+bindMacToggle(VelSec, ModAntiLava)
+bindMacToggle(VelSec, ModAntiVoid)
+
+VelSec:Dropdown({
+    Name = "Anti-Void Fall Catch Mode",
+    Multi = false,
+    Required = true,
+    Options = { "Teleport (Recall to Edge)", "Bounce (High Launch Up)" },
+    Default = "Teleport (Recall to Edge)",
+    Callback = function(v)
+        CFG.antiVoidMode = (v and v:find("Bounce")) and "Bounce" or "Teleport"
+    end
+})
+
 VelSec:Toggle({
     Name = "Always Sprint",
     Default = true,
@@ -3147,6 +3217,100 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
     if CFG.noSlowdown then
         if c:GetAttribute("InCobweb") then c:SetAttribute("InCobweb", false) end
         if c:GetAttribute("OnSoulSand") then c:SetAttribute("OnSoulSand", false) end
+        local isEatingOrBlocking = c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted")
+        if isEatingOrBlocking or hum.WalkSpeed < 13.8 then
+            -- Maintain natural walk/sprint speed without artificial teleport +speed
+            local targetNormalSpeed = (c:GetAttribute("Sprinting") or CFG.alwaysSprint) and 17.95 or 13.81
+            if hum.WalkSpeed < targetNormalSpeed then
+                hum.WalkSpeed = targetNormalSpeed
+            end
+        end
+    end
+
+    -- 🌋 Anti-Lava System (Lava Barrier, Eject & Extinguish)
+    if CFG.antiLava then
+        local inLavaAttr = c:GetAttribute("InLava")
+        local courtyard = workspace:FindFirstChild("OvergrownCourtyard")
+        local lavaPool = courtyard and courtyard:FindFirstChild("LavaPool")
+        local lavaPart = lavaPool and lavaPool:FindFirstChild("Lava")
+        local isInsideLavaVolume = false
+        local lavaTopY = 2.56
+        if lavaPart then
+            lavaTopY = lavaPart.Position.Y + lavaPart.Size.Y / 2
+            local rel = lavaPart.CFrame:PointToObjectSpace(root.Position)
+            if math.abs(rel.X) <= (lavaPart.Size.X / 2 + 1) and math.abs(rel.Z) <= (lavaPart.Size.Z / 2 + 1) and rel.Y <= (lavaPart.Size.Y / 2 + 0.6) then
+                isInsideLavaVolume = true
+            end
+        end
+
+        if inLavaAttr or isInsideLavaVolume then
+            if inLavaAttr then
+                c:SetAttribute("InLava", false)
+            end
+            if root.Position.Y < lavaTopY + 1.2 then
+                root.CFrame = CFrame.new(root.Position.X, lavaTopY + 2.2, root.Position.Z)
+                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 32, root.AssemblyLinearVelocity.Z)
+            end
+            for _, child in ipairs(c:GetDescendants()) do
+                if child:IsA("Fire") or (child:IsA("ParticleEmitter") and child.Name:lower():find("fire")) then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end
+    end
+
+    -- 🕳️ Safe Ground Tracker & Anti-Void Catch
+    local curPos = root.Position
+    local isGrounded = hum.FloorMaterial ~= Enum.Material.Air and root.AssemblyLinearVelocity.Y >= -8
+    if isGrounded and curPos.Y > -10 then
+        local rayP = RaycastParams.new()
+        rayP.FilterType = Enum.RaycastFilterType.Exclude
+        rayP.FilterDescendantsInstances = { c, antiLavaBarrier }
+        local groundHit = workspace:Raycast(curPos, Vector3.new(0, -6, 0), rayP)
+        if groundHit and groundHit.Instance then
+            local hitName = groundHit.Instance.Name:lower()
+            if not hitName:find("lava") then
+                lastSafeGroundCFrame = root.CFrame
+                lastSafeGroundTime = os.clock()
+            end
+        end
+    end
+
+    if CFG.antiVoid and (os.clock() - lastAntiVoidTrigger) > 1.2 then
+        local triggerVoid = false
+        if curPos.Y < -22 then
+            triggerVoid = true
+        elseif root.AssemblyLinearVelocity.Y < -28 and lastSafeGroundCFrame and (lastSafeGroundCFrame.Position.Y - curPos.Y) > 14 then
+            local rayP = RaycastParams.new()
+            rayP.FilterType = Enum.RaycastFilterType.Exclude
+            rayP.FilterDescendantsInstances = { c }
+            local hit = workspace:Raycast(curPos, Vector3.new(0, -50, 0), rayP)
+            if not hit then
+                triggerVoid = true
+            end
+        end
+
+        if triggerVoid then
+            lastAntiVoidTrigger = os.clock()
+            if CFG.antiVoidMode == "Bounce" then
+                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 65, root.AssemblyLinearVelocity.Z)
+                if lastSafeGroundCFrame then
+                    local toSafe = (lastSafeGroundCFrame.Position - curPos)
+                    local dir = Vector3.new(toSafe.X, 0, toSafe.Z).Unit
+                    root.AssemblyLinearVelocity = root.AssemblyLinearVelocity + dir * 25
+                end
+            else
+                if lastSafeGroundCFrame then
+                    root.CFrame = lastSafeGroundCFrame + Vector3.new(0, 3, 0)
+                    root.AssemblyLinearVelocity = Vector3.new(0, 15, 0)
+                else
+                    root.AssemblyLinearVelocity = Vector3.new(0, 60, 0)
+                end
+            end
+            if CFG.toggleNotifs then
+                showToggleNotification("Anti-Void (Caught)", true, Enum.KeyCode.Unknown)
+            end
+        end
     end
 
     if CFG.noclip then
@@ -3273,26 +3437,24 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
             end
 
             local horiz = Vector3.new(moveVec.X, 0, moveVec.Z)
-            local isEatingOrBlocking = c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted")
 
-            if horiz.Magnitude > 0.05 then
-                local baseSpd = CFG.speedEnabled and CFG.speedValue or 18.2
+            if CFG.speedEnabled and horiz.Magnitude > 0.05 then
+                local baseSpd = CFG.speedValue or 18.2
                 local spd = CFG.acSafeSpeed and math.clamp(baseSpd, 14.0, 18.5) or baseSpd
-                if not CFG.speedEnabled and CFG.noSlowdown and isEatingOrBlocking then
-                    spd = 18.0
+                hum.WalkSpeed = spd
+                local moveDir = horiz.Unit
+                local step = moveDir * (spd * dt)
+                root.CFrame = root.CFrame + step
+                root.AssemblyLinearVelocity = Vector3.new(moveDir.X * spd, root.AssemblyLinearVelocity.Y, moveDir.Z * spd)
+
+                if (CFG.bhopEnabled or CFG.noJumpDelay) and hum.FloorMaterial ~= Enum.Material.Air then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    hum.Jump = true
                 end
-
-                if CFG.speedEnabled or (CFG.noSlowdown and isEatingOrBlocking) then
-                    hum.WalkSpeed = spd
-                    local moveDir = horiz.Unit
-                    local step = moveDir * (spd * dt)
-                    root.CFrame = root.CFrame + step
-                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * spd, root.AssemblyLinearVelocity.Y, moveDir.Z * spd)
-
-                    if (CFG.bhopEnabled or CFG.noJumpDelay) and hum.FloorMaterial ~= Enum.Material.Air then
-                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
-                        hum.Jump = true
-                    end
+            elseif (CFG.bhopEnabled or CFG.noJumpDelay) and horiz.Magnitude > 0.05 and hum.FloorMaterial ~= Enum.Material.Air then
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) or CFG.bhopEnabled then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    hum.Jump = true
                 end
             end
         end
@@ -3821,6 +3983,9 @@ ENV.__MIDHUB_MCHVH_CLEANUP = function()
     end
     if trapAnchorFolder and trapAnchorFolder.Parent then
         pcall(function() trapAnchorFolder:Destroy() end)
+    end
+    if antiLavaBarrier and antiLavaBarrier.Parent then
+        pcall(function() antiLavaBarrier:Destroy() end)
     end
     if targetHighlight then
         pcall(function() targetHighlight:Destroy() end)
