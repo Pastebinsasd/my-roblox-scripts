@@ -461,7 +461,7 @@ local CFG = {
     -- Target Strafe (AC Safe Bypass)
     targetStrafe      = false,
     strafeRadius      = 5.5,
-    strafeSpeed       = 26.0,
+    strafeSpeed       = 19.8,
     acSafeSpeed       = true,
 
     -- Anti-Aim / Yaw / Spinbot
@@ -487,7 +487,7 @@ local CFG = {
     kbVerticalPct     = 0,
     noSlowdown        = true,
     speedEnabled      = false,
-    speedValue        = 28.0,
+    speedValue        = 20.2,
     noJumpDelay       = true,
     bhopEnabled       = false,
     alwaysSprint      = true,
@@ -2193,9 +2193,9 @@ AuraSec:Slider({
 
 AuraSec:Slider({
     Name = "Target Strafe Speed",
-    Default = 26.0,
+    Default = 19.8,
     Minimum = 14.0,
-    Maximum = 45.0,
+    Maximum = 35.0,
     DisplayMethod = "Value",
     Precision = 1,
     Callback = function(v) CFG.strafeSpeed = v end
@@ -2382,10 +2382,10 @@ SpeedSec:Header({ Name = "Speed, Bhop & Flight" })
 bindMacToggle(SpeedSec, ModSpeed)
 
 SpeedSec:Slider({
-    Name = "Move Speed Value",
-    Default = 28.0,
-    Minimum = 16.0,
-    Maximum = 65.0,
+    Name = "Move Speed Value (Safe max: 20.5)",
+    Default = 20.2,
+    Minimum = 14.0,
+    Maximum = 45.0,
     DisplayMethod = "Value",
     Precision = 1,
     Callback = function(v) CFG.speedValue = v end
@@ -2897,7 +2897,7 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
             if tRoot then
                 isStrafing = true
                 local effectiveRadius = math.max(2.5, CFG.strafeRadius)
-                local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14, 32.0) or CFG.strafeSpeed
+                local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14.0, 20.2) or CFG.strafeSpeed
                 
                 if lastStrafeTarget ~= strafeTarget then
                     lastStrafeTarget = strafeTarget
@@ -2955,8 +2955,8 @@ trackConn(RunService.RenderStepped:Connect(function(dt)
             local isEatingOrBlocking = c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted")
 
             if horiz.Magnitude > 0.05 then
-                local baseSpd = CFG.speedEnabled and CFG.speedValue or 20.0
-                local spd = CFG.acSafeSpeed and math.clamp(baseSpd, 16.0, 32.0) or baseSpd
+                local baseSpd = CFG.speedEnabled and CFG.speedValue or 20.2
+                local spd = CFG.acSafeSpeed and math.clamp(baseSpd, 14.0, 20.4) or baseSpd
                 if not CFG.speedEnabled and CFG.noSlowdown and isEatingOrBlocking then
                     spd = 18.5
                 end
