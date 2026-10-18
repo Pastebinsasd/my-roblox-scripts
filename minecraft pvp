@@ -2806,6 +2806,7 @@ local jitterFlip = false
 local strafeAngle = 0
 local attackSeq = 1000
 local hitSwitchToggle = false
+local lastStrafeTarget = nil
 
 trackConn(RunService.PostSimulation:Connect(function(dt)
     local c = getChar()
@@ -2881,21 +2882,45 @@ trackConn(RunService.PostSimulation:Connect(function(dt)
                 local effectiveRadius = math.max(2.5, CFG.strafeRadius)
                 local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 14, 20.0) or CFG.strafeSpeed
                 
-                local curAngle = math.atan2(root.Position.Z - tRoot.Position.Z, root.Position.X - tRoot.Position.X)
+                if lastStrafeTarget ~= strafeTarget then
+                    lastStrafeTarget = strafeTarget
+                    strafeAngle = math.atan2(root.Position.Z - tRoot.Position.Z, root.Position.X - tRoot.Position.X)
+                end
+
                 local strafeDir = CFG.strafeDirection or 1
-                strafeAngle = curAngle + (strafeDir * (effectiveSpeed / effectiveRadius) * dt)
+                strafeAngle = strafeAngle + (strafeDir * (effectiveSpeed / effectiveRadius) * dt)
 
                 local goalX = tRoot.Position.X + math.cos(strafeAngle) * effectiveRadius
                 local goalZ = tRoot.Position.Z + math.sin(strafeAngle) * effectiveRadius
                 local toGoal = Vector3.new(goalX - root.Position.X, 0, goalZ - root.Position.Z)
 
                 if toGoal.Magnitude > 0.05 then
-                    local stepMove = toGoal.Unit * (effectiveSpeed * dt)
-                    root.CFrame = root.CFrame + stepMove
-                    root.CFrame = CFrame.lookAt(root.Position, Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z))
+                    local moveDir = toGoal.Unit
+                    local stepMove = moveDir * (effectiveSpeed * dt)
+                    local newPos = root.Position + stepMove
+                    root.CFrame = CFrame.lookAt(newPos, Vector3.new(tRoot.Position.X, newPos.Y, tRoot.Position.Z))
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * effectiveSpeed, root.AssemblyLinearVelocity.Y, moveDir.Z * effectiveSpeed)
+
+                    -- Wall collision check (auto-reverses direction like Argon 4)
+                    local rayP = RaycastParams.new()
+                    rayP.FilterType = Enum.RaycastFilterType.Exclude
+                    rayP.FilterDescendantsInstances = { c }
+                    local wallHit = workspace:Raycast(root.Position, moveDir * 2.2, rayP)
+                    if wallHit and wallHit.Instance and wallHit.Instance.CanCollide then
+                        CFG.strafeDirection = -(CFG.strafeDirection or 1)
+                    end
+
+                    -- Auto bhop while strafing
+                    if hum.FloorMaterial ~= Enum.Material.Air then
+                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
                 end
             end
-        elseif CFG.speedEnabled or (CFG.noSlowdown and (c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted"))) then
+        else
+            lastStrafeTarget = nil
+        end
+
+        if not (CFG.targetStrafe and strafeTarget) and (CFG.speedEnabled or (CFG.noSlowdown and (c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted")))) then
             local moveDir = hum.MoveDirection
             if moveDir.Magnitude > 0.05 then
                 local spd = CFG.speedEnabled and (CFG.acSafeSpeed and math.min(CFG.speedValue, 20.0) or CFG.speedValue) or 18.5
