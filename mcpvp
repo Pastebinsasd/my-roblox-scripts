@@ -418,6 +418,7 @@ local BuildingAction     = ReplicatedStorage:WaitForChild("BuildingAction", 10)
 local MinecraftBowAction = ReplicatedStorage:WaitForChild("MinecraftBowAction", 10)
 local EatGoldenApple     = ReplicatedStorage:WaitForChild("EatGoldenApple", 10)
 local MinecraftSneak     = ReplicatedStorage:WaitForChild("MinecraftSneak", 10)
+local ConfirmedMeleeFlash = ReplicatedStorage:WaitForChild("ConfirmedMeleeFlash", 5)
 
 local MinecraftMeleeGeometry  = nil
 local MinecraftBlockPlacement = nil
@@ -455,8 +456,12 @@ local CFG = {
     autoBlockHit      = false,
     autoEquipSword    = true,
     ignoreTeammates   = true,
-    throughWalls      = false,
     highlightTarget   = true,
+
+    -- Critical Hits (HvH Crits)
+    criticalsEnabled  = true,
+    criticalsMode     = "Smart Fall",
+    critVisualStars   = true,
 
     -- Target Strafe (AC Safe Bypass)
     targetStrafe      = false,
@@ -628,6 +633,7 @@ local placeFn          = nil
 local fallbackSeq      = 2500
 local fallbackBuildSeq = 500
 local lastAuraSwingClk = 0
+local applyCriticalsPreAttack = nil
 
 local function bindClientClosures()
     pcall(function()
@@ -640,6 +646,21 @@ local function bindClientClosures()
                     if src:find("MinecraftCombatClient") then
                         if info.name == "performAttack" then
                             performAttackFn = fn
+                            if hookfunction and not ENV.__MIDHUB_HOOKED_ATTACK then
+                                ENV.__MIDHUB_HOOKED_ATTACK = true
+                                local origPerformAttack = nil
+                                origPerformAttack = hookfunction(fn, function(...)
+                                    if CFG.criticalsEnabled and applyCriticalsPreAttack then
+                                        local c = lp.Character
+                                        local root = c and c:FindFirstChild("HumanoidRootPart")
+                                        local hum = c and c:FindFirstChildOfClass("Humanoid")
+                                        if root and hum then
+                                            pcall(applyCriticalsPreAttack, root, hum, nil)
+                                        end
+                                    end
+                                    return origPerformAttack(...)
+                                end)
+                            end
                         elseif info.name == "setThirdPerson" then
                             setThirdPersonFn = fn
                         end
@@ -727,8 +748,139 @@ local function getNextBuildSeq()
 end
 
 -- ========================================================================
--- 🛠️ HELPER FUNCTIONS
+-- 🛠️ HELPER FUNCTIONS & CRITICALS SYSTEM
 -- ========================================================================
+local lastCritHopTime = 0
+
+local function spawnCriticalHitEffect(targetChar)
+    if not targetChar then return end
+    local tRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso")
+    if not tRoot then return end
+
+    -- Play official Minecraft 1.8 Critical hit sound
+    pcall(function()
+        local critSound = ReplicatedStorage:FindFirstChild("CombatCriticalSound")
+        if critSound then
+            local s = critSound:Clone()
+            s.Parent = tRoot
+            s.Volume = 0.85
+            s:Play()
+            game:GetService("Debris"):AddItem(s, 1.2)
+        end
+    end)
+
+    -- Spawn Red Critical Hit Stars (rbxassetid://119054548225080)
+    pcall(function()
+        local p = Instance.new("Part")
+        p.Name = "MidHub_CritFX"
+        p.Size = Vector3.new(1.5, 2.8, 1.5)
+        p.Transparency = 1
+        p.Anchored = true
+        p.CanCollide = false
+        p.CanTouch = false
+        p.CanQuery = false
+        p.CFrame = tRoot.CFrame * CFrame.new(0, 0.72, 0)
+        p.Parent = workspace
+
+        local pe = Instance.new("ParticleEmitter")
+        pe.Name = "Critical"
+        pe.Texture = "rbxassetid://119054548225080"
+        pe.LightEmission = 1.05
+        pe.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.65),
+            NumberSequenceKeypoint.new(1, 0.2)
+        })
+        pe.Color = ColorSequence.new(Color3.fromRGB(255, 45, 45))
+        pe.Speed = NumberRange.new(3.5, 6)
+        pe.SpreadAngle = Vector2.new(180, 180)
+        pe.Lifetime = NumberRange.new(0.4, 0.7)
+        pe.Rate = 0
+        pe.Parent = p
+
+        local peExtra = Instance.new("ParticleEmitter")
+        peExtra.Name = "CriticalExtra"
+        peExtra.Texture = "rbxassetid://119054548225080"
+        peExtra.LightEmission = 0.95
+        peExtra.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.8),
+            NumberSequenceKeypoint.new(1, 0.3)
+        })
+        peExtra.Color = ColorSequence.new(Color3.fromRGB(255, 180, 60))
+        peExtra.Speed = NumberRange.new(4, 7)
+        peExtra.SpreadAngle = Vector2.new(180, 180)
+        peExtra.Lifetime = NumberRange.new(0.4, 0.8)
+        peExtra.Rate = 0
+        peExtra.Parent = p
+
+        pe:Emit(10)
+        peExtra:Emit(10)
+
+        game:GetService("Debris"):AddItem(p, 1.0)
+    end)
+end
+
+applyCriticalsPreAttack = function(myRoot, myHum, payload)
+    if not CFG.criticalsEnabled or not myRoot or not myHum then return "READY" end
+
+    local isAirborne = (myHum.FloorMaterial == Enum.Material.Air)
+    local mode = CFG.criticalsMode
+
+    if mode == "Smart Fall" then
+        if isAirborne then
+            -- If rising in a jump/bhop, wait until peak height passes and downward fall starts (Y-vel <= 0.3)
+            if myRoot.AssemblyLinearVelocity.Y > 0.3 then
+                return "WAIT_FALL"
+            end
+        end
+    elseif mode == "Mini Hop" then
+        if not isAirborne then
+            local now = os.clock()
+            if (now - lastCritHopTime) > 0.35 then
+                lastCritHopTime = now
+                myHum:ChangeState(Enum.HumanoidStateType.Jumping)
+                myHum.Jump = true
+                return "WAIT_FALL"
+            end
+        else
+            if myRoot.AssemblyLinearVelocity.Y > 0.3 then
+                return "WAIT_FALL"
+            end
+        end
+    elseif mode == "Packet" then
+        if not isAirborne then
+            -- Micro-packet vertical displacement: lifts character slightly into falling Freefall state on server
+            local origCF = myRoot.CFrame
+            local origVel = myRoot.AssemblyLinearVelocity
+            myRoot.CFrame = origCF + Vector3.new(0, 0.18, 0)
+            myRoot.AssemblyLinearVelocity = Vector3.new(origVel.X, -2.5, origVel.Z)
+            myHum:ChangeState(Enum.HumanoidStateType.Freefall)
+            if payload and payload.eye then
+                payload.eye = payload.eye + Vector3.new(0, 0.18, 0)
+            end
+            task.defer(function()
+                if myRoot and myRoot.Parent then
+                    myRoot.CFrame = origCF
+                    myRoot.AssemblyLinearVelocity = origVel
+                end
+            end)
+        else
+            if myRoot.AssemblyLinearVelocity.Y > 0.3 then
+                return "WAIT_FALL"
+            end
+        end
+    end
+
+    return "READY"
+end
+
+if ConfirmedMeleeFlash then
+    trackConn(ConfirmedMeleeFlash.OnClientEvent:Connect(function(hitModel, isCrit, isBlocked)
+        if CFG.criticalsEnabled and CFG.critVisualStars and isCrit and hitModel then
+            spawnCriticalHitEffect(hitModel)
+        end
+    end))
+end
+
 local function getChar()
     return lp.Character
 end
@@ -2006,6 +2158,7 @@ local ModKillAura     = registerBindableModule("KillAura",     "Kill Aura",     
         targetHighlight.Adornee = nil
     end
 end)
+local ModCriticals    = registerBindableModule("Criticals",    "Critical Hits",    "criticalsEnabled", Enum.KeyCode.Unknown, nil)
 local ModSpinbot      = registerBindableModule("Spinbot",      "Spinbot / Yaw",    "yawEnabled",      Enum.KeyCode.Unknown, nil)
 local ModTargetStrafe = registerBindableModule("TargetStrafe", "Target Strafe",    "targetStrafe",    Enum.KeyCode.Unknown, nil)
 local ModAutoTrap     = registerBindableModule("AutoTrap",     "Auto Trap Enemy",  "autoTrap",        Enum.KeyCode.Unknown, nil)
@@ -2547,6 +2700,32 @@ AuraSec:Toggle({
     Name = "Auto Equip Diamond Sword",
     Default = true,
     Callback = function(v) CFG.autoEquipSword = v end
+})
+
+AuraSec:Header({ Name = "Critical Hits (HvH Crits)" })
+bindMacToggle(AuraSec, ModCriticals)
+
+AuraSec:Dropdown({
+    Name = "Criticals Mode",
+    Multi = false,
+    Required = true,
+    Options = { "Smart Fall (Bhop / Jump Fall Sync)", "Mini Hop (Auto Ground Hop)", "Packet (Micro-Hop Offset)" },
+    Default = "Smart Fall (Bhop / Jump Fall Sync)",
+    Callback = function(v)
+        if v and v:find("Smart Fall") then
+            CFG.criticalsMode = "Smart Fall"
+        elseif v and v:find("Mini Hop") then
+            CFG.criticalsMode = "Mini Hop"
+        elseif v and v:find("Packet") then
+            CFG.criticalsMode = "Packet"
+        end
+    end
+})
+
+AuraSec:Toggle({
+    Name = "Visual Critical Stars (Red Hit Stars)",
+    Default = true,
+    Callback = function(v) CFG.critVisualStars = v end
 })
 
 bindMacToggle(AuraSec, ModTargetStrafe)
@@ -3664,6 +3843,14 @@ task.spawn(function()
                     -- Strictly require a valid MinecraftMeleeGeometry intersection within <= maxAllowedReach (<= 9.5)
                     -- AND clear line-of-sight (already verified inside multipoint loop)
                     if unitDir and hitDist and hitDist <= maxAllowedReach then
+                        -- Criticals Pre-Attack Check:
+                        if CFG.criticalsEnabled then
+                            local critStatus = applyCriticalsPreAttack(myRoot, myHum, nil)
+                            if critStatus == "WAIT_FALL" then
+                                break
+                            end
+                        end
+
                         -- Align horizontal Root CFrame with unitDir before firing so LookVector matches attack direction
                         local horizDir = Vector3.new(unitDir.X, 0, unitDir.Z)
                         if horizDir.Magnitude > 0.05 then
@@ -3683,6 +3870,10 @@ task.spawn(function()
                             hitPart = hitPartName,
                         }
 
+                        if CFG.criticalsEnabled then
+                            applyCriticalsPreAttack(myRoot, myHum, payload)
+                        end
+
                         if MeleeHitVisuals and MeleeHitVisuals.Predict then
                             pcall(MeleeHitVisuals.Predict, target)
                         end
@@ -3691,6 +3882,10 @@ task.spawn(function()
                         pcall(function()
                             AttackRemote:FireServer(target, eye + unitDir * hitDist, unitDir, nil, payload)
                         end)
+
+                        if CFG.criticalsEnabled and CFG.critVisualStars then
+                            spawnCriticalHitEffect(target)
+                        end
                     end
                 end
             else
