@@ -36,6 +36,7 @@ local lp = Players.LocalPlayer
 local fRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local fGetHwid = gethwid or (syn and syn.get_hwid) or get_hwid or (function() return tostring(lp.UserId) end)
 local fSetClipboard = setclipboard or toclipboard or (syn and syn.write_clipboard) or set_clipboard
+local fGetClipboard = getclipboard or (syn and syn.get_clipboard) or nil
 local fIsFile = isfile or (function() return false end)
 local fReadFile = readfile or (function() return nil end)
 local fWriteFile = writefile or (function() end)
@@ -134,10 +135,15 @@ local function createKeyModal(onSuccessCallback)
     keyGui.DisplayOrder = 9999999
     keyGui.Parent = getGuiContainer()
 
+    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+    local kWidth = math.clamp(math.floor(vp.X - 24), 300, 360)
+    local kHeight = math.clamp(math.floor(vp.Y - 24), 340, 420)
+
     local KeyFrame = Instance.new("Frame")
     KeyFrame.Name = "MID_HUB_KeyFrame"
-    KeyFrame.Size = UDim2.fromOffset(360, 420)
-    KeyFrame.Position = UDim2.new(0.5, -180, 0.5, -210)
+    KeyFrame.Size = UDim2.fromOffset(kWidth, kHeight)
+    KeyFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    KeyFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     KeyFrame.BackgroundColor3 = Color3.fromRGB(17, 18, 19)
     KeyFrame.BorderSizePixel = 0
     KeyFrame.ClipsDescendants = true
@@ -215,7 +221,7 @@ local function createKeyModal(onSuccessCallback)
 
     local KeyBox = Instance.new("TextBox")
     KeyBox.Name = "KeyBox"
-    KeyBox.Size = UDim2.new(1, -24, 1, 0)
+    KeyBox.Size = UDim2.new(1, -84, 1, 0)
     KeyBox.Position = UDim2.fromOffset(12, 0)
     KeyBox.BackgroundTransparency = 1
     KeyBox.PlaceholderText = "Enter MID-... Key"
@@ -227,6 +233,37 @@ local function createKeyModal(onSuccessCallback)
     KeyBox.TextXAlignment = Enum.TextXAlignment.Left
     KeyBox.ClearTextOnFocus = false
     KeyBox.Parent = KeyField
+
+    local PasteBtn = Instance.new("TextButton")
+    PasteBtn.Name = "PasteBtn"
+    PasteBtn.Size = UDim2.fromOffset(60, 30)
+    PasteBtn.Position = UDim2.new(1, -68, 0.5, -15)
+    PasteBtn.BackgroundColor3 = Color3.fromRGB(36, 35, 48)
+    PasteBtn.BorderSizePixel = 0
+    PasteBtn.Text = "📋 Paste"
+    PasteBtn.TextColor3 = Color3.fromRGB(200, 190, 255)
+    PasteBtn.Font = Enum.Font.GothamBold
+    PasteBtn.TextSize = 11
+    PasteBtn.Parent = KeyField
+
+    local PasteCorner = Instance.new("UICorner")
+    PasteCorner.CornerRadius = UDim.new(0, 7)
+    PasteCorner.Parent = PasteBtn
+
+    PasteBtn.MouseButton1Click:Connect(function()
+        local clip = nil
+        if fGetClipboard then
+            pcall(function() clip = fGetClipboard() end)
+        end
+        if clip and #clip > 0 then
+            KeyBox.Text = tostring(clip):gsub("%s+", "")
+            PasteBtn.Text = "✓"
+            task.delay(1.5, function() if PasteBtn then PasteBtn.Text = "📋 Paste" end end)
+        else
+            PasteBtn.Text = "Empty"
+            task.delay(1.2, function() if PasteBtn then PasteBtn.Text = "📋 Paste" end end)
+        end
+    end)
 
     local StatusRow = Instance.new("Frame")
     StatusRow.Name = "StatusRow"
@@ -541,6 +578,7 @@ local CFG = {
     contrastBoost     = 0.15,
     customFogEnabled  = false,
     fogEndDist        = 280,
+    mobileButton      = true,
     configNameInput   = "default",
 }
 
@@ -1826,7 +1864,10 @@ local function updateHudHeight(collapsed)
     end
 end
 
-local isHudCollapsed = false
+local isHudCollapsed = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+minBtn.Text = isHudCollapsed and "+" or "—"
+updateHudHeight(isHudCollapsed)
+
 minBtn.MouseButton1Click:Connect(function()
     isHudCollapsed = not isHudCollapsed
     minBtn.Text = isHudCollapsed and "+" or "—"
@@ -1917,6 +1958,18 @@ do
     menuBadgeTxt.ZIndex = 7
     menuBadgeTxt.Parent = menuBadge
 
+    local function toggleMenuUI()
+        if Window and Window.SetState and Window.GetState then
+            pcall(function() Window:SetState(not Window:GetState()) end)
+        end
+    end
+
+    menuBadge.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            toggleMenuUI()
+        end
+    end)
+
     row.MouseEnter:Connect(function()
         TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             BackgroundColor3 = Color3.fromRGB(23, 22, 31)
@@ -1950,6 +2003,10 @@ do
     end)
 
     keyBtn.MouseButton1Click:Connect(function()
+        if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+            toggleMenuUI()
+            return
+        end
         activeRebindModule = "__MENU__"
         keyBtn.Text = "[ ... ]"
         keyBtn.BackgroundColor3 = Color3.fromRGB(115, 90, 235)
@@ -2168,6 +2225,11 @@ local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, o
     end
 
     keyBtn.MouseButton1Click:Connect(function()
+        if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+            -- On touch devices without keyboard, tapping the pill toggles the module directly
+            mod:SetState(not CFG[mod.cfgKey], false)
+            return
+        end
         activeRebindModule = mod
         keyBtn.Text = "[ ... ]"
         keyBtn.BackgroundColor3 = Color3.fromRGB(115, 90, 235)
@@ -2220,7 +2282,7 @@ MODS.AntiLava     = registerBindableModule("AntiLava",     "Anti Lava",        "
 end)
 MODS.AntiVoid     = registerBindableModule("AntiVoid",     "Anti Void",        "antiVoid",        Enum.KeyCode.Unknown, nil)
 
-updateHudHeight(false)
+updateHudHeight(isHudCollapsed)
 
 -- Global InputListener for Keybinds & On-HUD Rebinding
 trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -2256,6 +2318,19 @@ trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 else
                     activeRebindModule.key = kc
                     activeRebindModule:RefreshHudVisuals()
+                end
+            end
+            activeRebindModule = nil
+            return
+        elseif input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            -- Tapping outside or on screen cancels rebind mode cleanly
+            if activeRebindModule ~= "__MENU__" then
+                activeRebindModule:RefreshHudVisuals()
+            else
+                menuKeyPillBtn.Text = formatKeycapText(CFG.menuKeybind)
+                menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                if menuKeyBtnStroke then
+                    menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
                 end
             end
             activeRebindModule = nil
@@ -2657,18 +2732,130 @@ Players.PlayerRemoving:Connect(cleanupPlayerEsp)
 
 local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
+local vp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+local isTouchDevice = UserInputService.TouchEnabled
+local winW = isTouchDevice and math.clamp(math.floor(vp.X - 24), 440, 780) or 840
+local winH = isTouchDevice and math.clamp(math.floor(vp.Y - 24), 310, 540) or 580
+
 Window = MacLib:Window({
     Title = "MID HUB — Minecraft PvP [HvH Edition]",
     Subtitle = "v3.3 • Kill Aura, Yaw/Spinbot, Auto Trap, Velocity & Keybinds HUD",
-    Size = UDim2.fromOffset(840, 580),
+    Size = UDim2.fromOffset(winW, winH),
     DragStyle = 1,
     DisabledWindowControls = {},
     ShowUserInfo = true,
     Keybind = CFG.menuKeybind,
-    AcrylicBlur = true,
+    AcrylicBlur = not isTouchDevice,
 })
 
+if isTouchDevice and vp.X < 740 and Window.SetScale then
+    pcall(function() Window:SetScale(0.85) end)
+end
+
 local TabGroup = Window:TabGroup()
+
+local mobileToggleGui = nil
+do
+    local mGui = Instance.new("ScreenGui")
+    mGui.Name = "MidHub_MobileToggleGui"
+    mGui.ResetOnSpawn = false
+    mGui.DisplayOrder = 999995
+    mGui.Parent = getGuiContainer()
+    mobileToggleGui = mGui
+
+    local floatBtn = Instance.new("Frame")
+    floatBtn.Name = "MobileToggleBtn"
+    floatBtn.Size = UDim2.fromOffset(48, 48)
+    floatBtn.Position = UDim2.new(0, 16, 0.52, 0)
+    floatBtn.BackgroundColor3 = Color3.fromRGB(18, 17, 26)
+    floatBtn.BackgroundTransparency = 0.12
+    floatBtn.BorderSizePixel = 0
+    floatBtn.Visible = CFG.mobileButton
+    floatBtn.Parent = mGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 14)
+    corner.Parent = floatBtn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(168, 85, 247)
+    stroke.Thickness = 1.5
+    stroke.Parent = floatBtn
+
+    local boltLbl = Instance.new("TextLabel")
+    boltLbl.Size = UDim2.new(1, 0, 0, 26)
+    boltLbl.Position = UDim2.fromOffset(0, 4)
+    boltLbl.BackgroundTransparency = 1
+    boltLbl.Font = Enum.Font.GothamBold
+    boltLbl.TextSize = 20
+    boltLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    boltLbl.Text = "⚡"
+    boltLbl.Parent = floatBtn
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, 0, 0, 14)
+    subLbl.Position = UDim2.fromOffset(0, 28)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Font = Enum.Font.GothamBold
+    subLbl.TextSize = 8.5
+    subLbl.TextColor3 = Color3.fromRGB(168, 85, 247)
+    subLbl.Text = "MID"
+    subLbl.Parent = floatBtn
+
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local activeInput = nil
+    local dragDistance = 0
+
+    floatBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = floatBtn.Position
+            activeInput = input
+            dragDistance = 0
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input == activeInput or input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            dragDistance = delta.Magnitude
+            local curVp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+            local newX = math.clamp(startPos.X.Offset + delta.X, 4, curVp.X - 54)
+            local newY = math.clamp(startPos.Y.Offset + delta.Y, 4, curVp.Y - 54)
+            floatBtn.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+        end
+    end)
+
+    local function toggleMenu()
+        if Window and Window.SetState and Window.GetState then
+            local isOpen = Window:GetState()
+            Window:SetState(not isOpen)
+            local targetStroke = (not isOpen) and Color3.fromRGB(74, 222, 128) or Color3.fromRGB(168, 85, 247)
+            TweenService:Create(stroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Color = targetStroke }):Play()
+
+            local tw1 = TweenService:Create(floatBtn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(54, 54) })
+            tw1:Play()
+            tw1.Completed:Connect(function()
+                TweenService:Create(floatBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Size = UDim2.fromOffset(48, 48) }):Play()
+            end)
+        end
+    end
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input == activeInput or input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                dragging = false
+                activeInput = nil
+                if dragDistance < 10 then
+                    toggleMenu()
+                end
+            end
+        end
+    end)
+end
 
 local Tabs = {
     Rage     = TabGroup:Tab({ Name = "Kill Aura & Yaw (HvH)", Image = "rbxassetid://10734975486" }),
@@ -3136,6 +3323,17 @@ do
         Name = "Play Sound On Module Toggle",
         Default = true,
         Callback = function(v) CFG.notifSound = v end
+    })
+
+    EspSec:Toggle({
+        Name = "Floating Mobile Menu Button (⚡)",
+        Default = CFG.mobileButton,
+        Callback = function(v)
+            CFG.mobileButton = v
+            if mobileToggleGui and mobileToggleGui:FindFirstChild("MobileToggleBtn") then
+                mobileToggleGui.MobileToggleBtn.Visible = v
+            end
+        end
     })
 
     EspSec:Header({ Name = "HvH 2D Box ESP" })
@@ -3613,8 +3811,19 @@ do
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec - camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec + camCF.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec - camCF.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVec = moveVec + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVec = moveVec - Vector3.new(0, 1, 0) end
+
+        -- Touch thumbstick support for mobile:
+        if moveVec.Magnitude < 0.05 and hum.MoveDirection.Magnitude > 0.05 then
+            local md = hum.MoveDirection
+            moveVec = Vector3.new(md.X, 0, md.Z)
+        end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or (UserInputService.TouchEnabled and hum.Jump) then
+            moveVec = moveVec + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            moveVec = moveVec - Vector3.new(0, 1, 0)
+        end
 
         root.AssemblyLinearVelocity = Vector3.zero
         if moveVec.Magnitude > 0 then
@@ -4376,6 +4585,9 @@ ENV.__MIDHUB_MCHVH_CLEANUP = function()
     end
     if espGui and espGui.Parent then
         pcall(function() espGui:Destroy() end)
+    end
+    if mobileToggleGui and mobileToggleGui.Parent then
+        pcall(function() mobileToggleGui:Destroy() end)
     end
     if Window and Window.Unload then
         pcall(function() Window:Unload() end)
