@@ -579,6 +579,7 @@ local CFG = {
     customFogEnabled  = false,
     fogEndDist        = 280,
     mobileButton      = true,
+    uiScale           = 0,
     configNameInput   = "default",
 }
 
@@ -2734,23 +2735,51 @@ local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/re
 
 local vp = camera and camera.ViewportSize or Vector2.new(1280, 720)
 local isTouchDevice = UserInputService.TouchEnabled
-local winW = isTouchDevice and math.clamp(math.floor(vp.X - 24), 440, 780) or 840
-local winH = isTouchDevice and math.clamp(math.floor(vp.Y - 24), 310, 540) or 580
+
+local function computeOptimalScale()
+    local curVp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    local isTouch = UserInputService.TouchEnabled or not UserInputService.KeyboardEnabled
+    if isTouch or curVp.Y < 640 or curVp.X < 960 then
+        local availW = math.max(curVp.X - 36, 260)
+        local availH = math.max(curVp.Y - 28, 220)
+        local scaleW = availW / 800
+        local scaleH = availH / 500
+        local fit = math.min(scaleW, scaleH)
+        return math.clamp(fit, 0.45, 0.82)
+    end
+    return 1.0
+end
+
+local function getActiveScale()
+    if CFG.uiScale and CFG.uiScale >= 45 and CFG.uiScale <= 100 then
+        return CFG.uiScale / 100
+    end
+    return computeOptimalScale()
+end
+
+local initialScale = getActiveScale()
 
 Window = MacLib:Window({
     Title = "MID HUB — Minecraft PvP [HvH Edition]",
     Subtitle = "v3.3 • Kill Aura, Yaw/Spinbot, Auto Trap, Velocity & Keybinds HUD",
-    Size = UDim2.fromOffset(winW, winH),
+    Size = UDim2.fromOffset(800, 500),
     DragStyle = 1,
     DisabledWindowControls = {},
     ShowUserInfo = true,
     Keybind = CFG.menuKeybind,
-    AcrylicBlur = not isTouchDevice,
+    AcrylicBlur = not (isTouchDevice or vp.Y < 600),
 })
 
-if isTouchDevice and vp.X < 740 and Window.SetScale then
-    pcall(function() Window:SetScale(0.85) end)
+if Window and Window.SetScale then
+    pcall(function() Window:SetScale(initialScale) end)
 end
+
+trackConn(camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    if (not CFG.uiScale or CFG.uiScale == 0) and Window and Window.SetScale then
+        local newScale = computeOptimalScale()
+        pcall(function() Window:SetScale(newScale) end)
+    end
+end))
 
 local TabGroup = Window:TabGroup()
 
@@ -3333,6 +3362,41 @@ do
             if mobileToggleGui and mobileToggleGui:FindFirstChild("MobileToggleBtn") then
                 mobileToggleGui.MobileToggleBtn.Visible = v
             end
+        end
+    })
+
+    EspSec:Slider({
+        Name = "Menu UI Scale (%)",
+        Default = math.floor(initialScale * 100),
+        Minimum = 45,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.uiScale = v
+            if Window and Window.SetScale then
+                pcall(function() Window:SetScale(v / 100) end)
+            end
+        end
+    })
+
+    EspSec:Button({
+        Name = "Recenter & Auto-Fit GUI (Mobile)",
+        Callback = function()
+            CFG.uiScale = 0
+            local newScale = computeOptimalScale()
+            if Window and Window.SetScale then
+                pcall(function() Window:SetScale(newScale) end)
+            end
+            pcall(function()
+                local container = getGuiContainer()
+                for _, g in ipairs(container:GetChildren()) do
+                    local b = g:FindFirstChild("Base")
+                    if b and b:IsA("Frame") then
+                        b.Position = UDim2.fromScale(0.5, 0.5)
+                    end
+                end
+            end)
         end
     })
 
