@@ -4516,8 +4516,12 @@ task.spawn(function()
                     if curDist > maxAllowedReach and CFG.backtrackEnabled and targetPlr then
                         local hist = backtrackHistory[targetPlr]
                         if hist and #hist > 0 then
+                            local closestTickDist = math.huge
                             for _, tick in ipairs(hist) do
                                 local tickDist = (tick.pos - myRoot.Position).Magnitude
+                                if tickDist < closestTickDist then
+                                    closestTickDist = tickDist
+                                end
                                 if tickDist <= maxAllowedReach then
                                     targetHitPos = tick.pos
                                     targetHitTime = tick.serverTime
@@ -4528,6 +4532,14 @@ task.spawn(function()
                                     end
                                     break
                                 end
+                            end
+
+                            if not isBacktracking and CFG.hitFailNotifs then
+                                showHitFailureNotification("Backtrack Out of Reach", string.format("Past ticks expired / closest was %.1fm (max %.1fm, %dms window)", closestTickDist, maxAllowedReach, CFG.backtrackMs or 150))
+                            end
+                        else
+                            if CFG.hitFailNotifs then
+                                showHitFailureNotification("Backtrack No History", string.format("Target has no buffered latency ticks (%.1fm away)", curDist))
                             end
                         end
                     else
@@ -4614,7 +4626,11 @@ task.spawn(function()
 
                     if not (unitDir and hitDist and hitDist <= maxAllowedReach) then
                         if CFG.hitFailNotifs and hadWallBlock then
-                            showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
+                            if isBacktracking then
+                                showHitFailureNotification("Backtrack Wall Obstructed", "Line of sight to past ghost blocked by wall/block")
+                            else
+                                showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
+                            end
                         end
                     end
 
