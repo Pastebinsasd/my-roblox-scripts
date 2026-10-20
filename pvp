@@ -528,6 +528,7 @@ local CFG = {
     backtrackEnabled      = false,
     backtrackMs           = 150,
     backtrackVisuals      = true,
+    backtrackPriority     = "Smart Fallback",
 
     -- Backtrap & Knockback Deflector
     backtrapEnabled       = false,
@@ -3317,6 +3318,15 @@ AuraSec:Toggle({
     end
 })
 
+AuraSec:Dropdown({
+    Name = "Backtrack Hit Priority",
+    Multi = false,
+    Required = true,
+    Options = { "Smart Fallback", "Always Backtrack", "Closest Point" },
+    Default = 1,
+    Callback = function(v) CFG.backtrackPriority = v end
+})
+
 AuraSec:Header({ Name = "Backtrap (Knockback Deflector)" })
 bindMacToggle(AuraSec, MODS.Backtrap)
 
@@ -4660,54 +4670,148 @@ task.spawn(function()
 
                     local curDist = (tRoot.Position - myRoot.Position).Magnitude
                     local unitDir, hitDist, hitPartName, hadWallBlock = nil, nil, nil, false
+                    local isBacktracking = false
 
-                    -- Step 1: If target is in normal reach, attempt direct hit at current position
-                    if curDist <= maxAllowedReach then
-                        unitDir, hitDist, hitPartName, hadWallBlock = scanGeometryHit(tRoot.Position, targetSneaking)
-                    end
-
-                    -- Step 2: If current position is out of reach or wall-blocked, test recent backtrack history
-                    if not unitDir and CFG.backtrackEnabled and targetPlr then
+                    -- Helper to scan backtrack ticks
+                    local function findValidBacktrackTick(preferOldest)
                         local hist = backtrackHistory[targetPlr]
-                        if hist and #hist > 0 then
-                            local closestTickDist = math.huge
-                            for _, tick in ipairs(hist) do
-                                local tickDist = (tick.pos - myRoot.Position).Magnitude
-                                if tickDist < closestTickDist then
-                                    closestTickDist = tickDist
-                                end
-                                if tickDist <= maxAllowedReach then
-                                    local bDir, bDist, bPart, bWall = scanGeometryHit(tick.pos, tick.sneaking)
-                                    if bDir and bDist then
-                                        unitDir = bDir
-                                        hitDist = bDist
-                                        hitPartName = bPart
-                                        targetHitPos = tick.pos
-                                        targetHitTime = tick.serverTime
-                                        targetSneaking = tick.sneaking
-                                        isBacktracking = true
-                                        hadWallBlock = false
-                                        break
-                                    elseif bWall then
-                                        hadWallBlock = true
-                                    end
-                                end
-                            end
+                        if not (hist and #hist > 0) then return nil, math.huge, false end
+                        local startIdx = preferOldest and #hist or 1
+                        local endIdx = preferOldest and 1 or #hist
+                        local step = preferOldest and -1 or 1
+                        local closestTickDist = math.huge
+                        local hadBlocked = false
 
-                            if not unitDir and CFG.hitFailNotifs then
-                                if curDist > maxAllowedReach then
-                                    showHitFailureNotification("Backtrack Out of Reach", string.format("Past ticks expired / closest was %.1fm (max %.1fm, %dms window)", closestTickDist, maxAllowedReach, CFG.backtrackMs or 150))
-                                elseif hadWallBlock then
-                                    showHitFailureNotification("Backtrack Wall Obstructed", "Line of sight to past ghost blocked by wall/block")
-                                end
+                        for i = startIdx, endIdx, step do
+                            local tick = hist[i]
+                            local tickDist = (tick.pos - myRoot.Position).Magnitude
+                            if tickDist < closestTickDist then
+                                closestTickDist = tickDist
                             end
-                        else
-                            if curDist > maxAllowedReach and CFG.hitFailNotifs then
-                                showHitFailureNotification("Backtrack No History", string.format("Target has no buffered latency ticks (%.1fm away)", curDist))
+                            if tickDist <= maxAllowedReach then
+                                local bDir, bDist, bPart, bWall = scanGeometryHit(tick.pos, tick.sneaking)
+                                if bDir and bDist then
+                                    return {
+                                        dir = bDir,
+                                        dist = bDist,
+                                        part = bPart,
+                                        pos = tick.pos,
+                                        time = tick.serverTime,
+                                        sneaking = tick.sneaking,
+                                    }, closestTickDist, false
+                                elseif bWall then
+                                    hadBlocked = true
+                                end
                             end
                         end
-                    elseif not unitDir and hadWallBlock and CFG.hitFailNotifs then
-                        showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
+                        return nil, closestTickDist, hadBlocked
+                    end
+
+                    local priorityMode = CFG.backtrackPriority or "Smart Fallback"
+                    local bResult, closestPastDist, bHadWall = nil, math.huge, false
+
+                    if CFG.backtrackEnabled and targetPlr then
+                        bResult, closestPastDist, bHadWall = findValidBacktrackTick(true)
+                    end
+
+                    if priorityMode == "Always Backtrack" and bResult then
+                        -- Prioritize hitting the backtrack ghost tick first
+                        unitDir = bResult.dir
+                        hitDist = bResult.dist
+                        hitPartName = bResult.part
+                        targetHitPos = bResult.pos
+                        targetHitTime = bResult.time
+                        targetSneaking = bResult.sneaking
+                        isBacktracking = true
+                    elseif priorityMode == "Closest Point" then
+                        local curRes = nil
+                        if curDist <= maxAllowedReach then
+                            local cDir, cDist, cPart, cWall = scanGeometryHit(tRoot.Position, targetSneaking)
+                            if cDir and cDist then
+                                curRes = { dir = cDir, dist = cDist, part = cPart, pos = tRoot.Position, time = workspace:GetServerTimeNow(), sneaking = targetSneaking }
+                            elseif cWall then
+                                hadWallBlock = true
+                            end
+                        end
+
+                        if bResult and curRes then
+                            if bResult.dist < curRes.dist then
+                                unitDir = bResult.dir
+                                hitDist = bResult.dist
+                                hitPartName = bResult.part
+                                targetHitPos = bResult.pos
+                                targetHitTime = bResult.time
+                                targetSneaking = bResult.sneaking
+                                isBacktracking = true
+                            else
+                                unitDir = curRes.dir
+                                hitDist = curRes.dist
+                                hitPartName = curRes.part
+                                targetHitPos = curRes.pos
+                                targetHitTime = curRes.time
+                                targetSneaking = curRes.sneaking
+                            end
+                        elseif bResult then
+                            unitDir = bResult.dir
+                            hitDist = bResult.dist
+                            hitPartName = bResult.part
+                            targetHitPos = bResult.pos
+                            targetHitTime = bResult.time
+                            targetSneaking = bResult.sneaking
+                            isBacktracking = true
+                        elseif curRes then
+                            unitDir = curRes.dir
+                            hitDist = curRes.dist
+                            hitPartName = curRes.part
+                            targetHitPos = curRes.pos
+                            targetHitTime = curRes.time
+                            targetSneaking = curRes.sneaking
+                        end
+                    else
+                        -- "Smart Fallback" (Default):
+                        -- Test direct hit on real body first
+                        if curDist <= maxAllowedReach then
+                            unitDir, hitDist, hitPartName, hadWallBlock = scanGeometryHit(tRoot.Position, targetSneaking)
+                        end
+                        -- If real body is out of reach or wall-blocked, fall back to backtrack ghost
+                        if not unitDir and bResult then
+                            unitDir = bResult.dir
+                            hitDist = bResult.dist
+                            hitPartName = bResult.part
+                            targetHitPos = bResult.pos
+                            targetHitTime = bResult.time
+                            targetSneaking = bResult.sneaking
+                            isBacktracking = true
+                            hadWallBlock = false
+                        end
+                    end
+
+                    -- If "Always Backtrack" couldn't hit a ghost (e.g. stationary or expired), fall back to real body
+                    if not unitDir and priorityMode == "Always Backtrack" and curDist <= maxAllowedReach then
+                        unitDir, hitDist, hitPartName, hadWallBlock = scanGeometryHit(tRoot.Position, targetSneaking)
+                        if unitDir then
+                            targetHitPos = tRoot.Position
+                            targetHitTime = workspace:GetServerTimeNow()
+                            targetSneaking = targetSneaking
+                            isBacktracking = false
+                        end
+                    end
+
+                    -- Failure Diagnostics
+                    if not unitDir and CFG.hitFailNotifs then
+                        if curDist > maxAllowedReach and CFG.backtrackEnabled and targetPlr then
+                            if closestPastDist < math.huge then
+                                showHitFailureNotification("Backtrack Out of Reach", string.format("Past ticks expired / closest was %.1fm (max %.1fm, %dms window)", closestPastDist, maxAllowedReach, CFG.backtrackMs or 150))
+                            else
+                                showHitFailureNotification("Backtrack No History", string.format("Target has no buffered latency ticks (%.1fm away)", curDist))
+                            end
+                        elseif hadWallBlock or bHadWall then
+                            if isBacktracking or priorityMode == "Always Backtrack" then
+                                showHitFailureNotification("Backtrack Wall Obstructed", "Line of sight to past ghost blocked by wall/block")
+                            else
+                                showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
+                            end
+                        end
                     end
 
                     -- Strictly require a valid MinecraftMeleeGeometry intersection within <= maxAllowedReach (<= 9.5)
