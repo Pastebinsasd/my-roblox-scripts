@@ -982,13 +982,72 @@ end
 
 -- 🕒 BACKTRACK STATE & GHOST HITBOX SYSTEM
 local backtrackHistory = {}
+ENV.__MIDHUB_BACKTRACK_HIST = backtrackHistory
 local backtrackGhostFolder = nil
+local backtrackGhostTarget = nil
 
 local function cleanupBacktrackGhost()
     if backtrackGhostFolder then
         pcall(function() backtrackGhostFolder:Destroy() end)
         backtrackGhostFolder = nil
+        backtrackGhostTarget = nil
     end
+end
+
+local function rebuildGhostParts(targetChar)
+    if backtrackGhostFolder then
+        pcall(function() backtrackGhostFolder:Destroy() end)
+        backtrackGhostFolder = nil
+    end
+
+    local folder = Instance.new("Folder")
+    folder.Name = "MidHub_BacktrackGhost"
+
+    local mb = targetChar:FindFirstChild("MinecraftBody")
+    local sourceParts = {}
+    if mb then
+        for _, p in ipairs(mb:GetChildren()) do
+            if p:IsA("BasePart") then
+                table.insert(sourceParts, p)
+            end
+        end
+    end
+    if #sourceParts == 0 then
+        for _, p in ipairs(targetChar:GetChildren()) do
+            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" and p.Name ~= "MinecraftFallbackCollider" then
+                table.insert(sourceParts, p)
+            end
+        end
+    end
+
+    for _, origPart in ipairs(sourceParts) do
+        local ghostPart = Instance.new("Part")
+        ghostPart.Name = origPart.Name
+        ghostPart.Size = origPart.Size
+        ghostPart.Anchored = true
+        ghostPart.CanCollide = false
+        ghostPart.CanTouch = false
+        ghostPart.CanQuery = false
+        ghostPart.CastShadow = false
+        ghostPart.Material = Enum.Material.Neon
+        ghostPart.Color = Color3.fromRGB(0, 235, 255)
+        ghostPart.Transparency = 0.55
+        ghostPart.Parent = folder
+    end
+
+    local hl = Instance.new("Highlight")
+    hl.Name = "GhostHighlight"
+    hl.Adornee = folder
+    hl.FillColor = Color3.fromRGB(0, 220, 255)
+    hl.FillTransparency = 0.65
+    hl.OutlineColor = Color3.fromRGB(180, 250, 255)
+    hl.OutlineTransparency = 0.15
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = folder
+
+    folder.Parent = workspace
+    backtrackGhostFolder = folder
+    backtrackGhostTarget = targetChar
 end
 
 local function updateBacktrackGhost(targetChar, targetCF)
@@ -998,39 +1057,53 @@ local function updateBacktrackGhost(targetChar, targetCF)
     end
 
     local tRoot = targetChar:FindFirstChild("HumanoidRootPart")
-    if not tRoot then return end
-
-    if not backtrackGhostFolder or not backtrackGhostFolder.Parent then
-        backtrackGhostFolder = Instance.new("Folder")
-        backtrackGhostFolder.Name = "MidHub_BacktrackGhost"
-        backtrackGhostFolder.Parent = workspace
+    if not tRoot or not targetChar.Parent or not tRoot.Parent then
+        cleanupBacktrackGhost()
+        return
     end
 
-    local existingParts = backtrackGhostFolder:GetChildren()
-    if #existingParts == 0 then
-        for _, part in ipairs(targetChar:GetChildren()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                local ghostPart = Instance.new("Part")
-                ghostPart.Name = part.Name
-                ghostPart.Size = part.Size
-                ghostPart.Anchored = true
-                ghostPart.CanCollide = false
-                ghostPart.CanTouch = false
-                ghostPart.CanQuery = false
-                ghostPart.CastShadow = false
-                ghostPart.Material = Enum.Material.Neon
-                ghostPart.Color = Color3.fromRGB(0, 230, 255)
-                ghostPart.Transparency = 0.55
-                ghostPart.Parent = backtrackGhostFolder
+    if not backtrackGhostFolder or not backtrackGhostFolder.Parent or backtrackGhostTarget ~= targetChar then
+        rebuildGhostParts(targetChar)
+    end
+
+    local delta = (tRoot.Position - targetCF.Position).Magnitude
+    if delta < 0.25 then
+        -- Target is stationary; hide ghost parts and highlight to prevent overlapping clutter
+        if backtrackGhostFolder then
+            for _, gp in ipairs(backtrackGhostFolder:GetChildren()) do
+                if gp:IsA("BasePart") then
+                    gp.Transparency = 1
+                end
+            end
+            local hl = backtrackGhostFolder:FindFirstChild("GhostHighlight")
+            if hl and hl:IsA("Highlight") then
+                hl.Enabled = false
+            end
+        end
+        return
+    else
+        -- Target is moving / taking knockback; reveal ghost parts and highlight
+        if backtrackGhostFolder then
+            for _, gp in ipairs(backtrackGhostFolder:GetChildren()) do
+                if gp:IsA("BasePart") then
+                    gp.Transparency = 0.55
+                end
+            end
+            local hl = backtrackGhostFolder:FindFirstChild("GhostHighlight")
+            if hl and hl:IsA("Highlight") then
+                hl.Enabled = true
             end
         end
     end
 
+    local mb = targetChar:FindFirstChild("MinecraftBody")
     for _, ghostPart in ipairs(backtrackGhostFolder:GetChildren()) do
-        local origPart = targetChar:FindFirstChild(ghostPart.Name)
-        if origPart and origPart:IsA("BasePart") then
-            local relOffset = tRoot.CFrame:ToObjectSpace(origPart.CFrame)
-            ghostPart.CFrame = targetCF * relOffset
+        if ghostPart:IsA("BasePart") then
+            local origPart = (mb and mb:FindFirstChild(ghostPart.Name)) or targetChar:FindFirstChild(ghostPart.Name)
+            if origPart and origPart:IsA("BasePart") then
+                local relOffset = tRoot.CFrame:ToObjectSpace(origPart.CFrame)
+                ghostPart.CFrame = targetCF * relOffset
+            end
         end
     end
 end
@@ -1114,7 +1187,7 @@ local function getClosestEnemy(maxDist)
     local bestDist = maxDist or math.huge
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= lp and plr.Character and canAttackTarget(plr.Character) then
+        if plr ~= lp and plr.Character then
             local r = plr.Character:FindFirstChild("HumanoidRootPart")
             if r then
                 local d = (r.Position - myRoot.Position).Magnitude
@@ -2441,6 +2514,8 @@ end
 
 -- Register all main HvH modules into the Keybinds HUD (Unbound / "None" by default; click any key pill on HUD to bind)
 local MODS = {}
+ENV.__MIDHUB_CFG = CFG
+ENV.__MIDHUB_MODS = MODS
 MODS.KillAura     = registerBindableModule("KillAura",     "Kill Aura",        "killAura",        Enum.KeyCode.Unknown, function(v)
     if not v then
         targetHighlight.Enabled = false
@@ -4511,43 +4586,6 @@ task.spawn(function()
                     local targetHitTime = workspace:GetServerTimeNow()
                     local isBacktracking = false
 
-                    -- Check if target is outside normal reach; if so, test recent backtrack history
-                    local curDist = (tRoot.Position - myRoot.Position).Magnitude
-                    if curDist > maxAllowedReach and CFG.backtrackEnabled and targetPlr then
-                        local hist = backtrackHistory[targetPlr]
-                        if hist and #hist > 0 then
-                            local closestTickDist = math.huge
-                            for _, tick in ipairs(hist) do
-                                local tickDist = (tick.pos - myRoot.Position).Magnitude
-                                if tickDist < closestTickDist then
-                                    closestTickDist = tickDist
-                                end
-                                if tickDist <= maxAllowedReach then
-                                    targetHitPos = tick.pos
-                                    targetHitTime = tick.serverTime
-                                    targetSneaking = tick.sneaking
-                                    isBacktracking = true
-                                    if CFG.backtrackVisuals then
-                                        updateBacktrackGhost(target, tick.cf)
-                                    end
-                                    break
-                                end
-                            end
-
-                            if not isBacktracking and CFG.hitFailNotifs then
-                                showHitFailureNotification("Backtrack Out of Reach", string.format("Past ticks expired / closest was %.1fm (max %.1fm, %dms window)", closestTickDist, maxAllowedReach, CFG.backtrackMs or 150))
-                            end
-                        else
-                            if CFG.hitFailNotifs then
-                                showHitFailureNotification("Backtrack No History", string.format("Target has no buffered latency ticks (%.1fm away)", curDist))
-                            end
-                        end
-                    else
-                        if CFG.backtrackVisuals then
-                            cleanupBacktrackGhost()
-                        end
-                    end
-
                     local isSneaking = c:GetAttribute("Sneaking") == true
                     local eye = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Eye)
                         and MinecraftMeleeGeometry.Eye(myRoot.Position, isSneaking)
@@ -4566,72 +4604,110 @@ task.spawn(function()
                         math.random(-15, 15) / 100
                     )
 
-                    local topY = targetSneaking and 1.82 or 2.15
-                    local headY = targetSneaking and 1.05 or 1.32
-                    local headOff = Vector3.new(0, headY, 0) + aimJitter
-                    local bodyOff = Vector3.new(0, -0.32, 0) + aimJitter
-                    local lowOff  = Vector3.new(0, -1.65, 0) + aimJitter
+                    -- Multipoint Hitbox Edge Scanner function
+                    local function scanGeometryHit(pos, sneaking)
+                        local topY = sneaking and 1.82 or 2.15
+                        local headY = sneaking and 1.05 or 1.32
+                        local headOff = Vector3.new(0, headY, 0) + aimJitter
+                        local bodyOff = Vector3.new(0, -0.32, 0) + aimJitter
+                        local lowOff  = Vector3.new(0, -1.65, 0) + aimJitter
 
-                    -- Multipoint Hitbox Edge Scanner:
-                    -- Server hitbox in MinecraftMeleeGeometry is [-0.96..0.96] XZ and [-4.0..2.3] Y.
-                    -- If center is blocked by a wall/cage, scan crown, corners, and lower/under-block edges for any clear ray!
-                    local primary = (chosenPart == "Head") and { headOff, bodyOff, lowOff } or { bodyOff, headOff, lowOff }
-                    local multipointEdges = {
-                        primary[1],
-                        primary[2],
-                        primary[3],
-                        Vector3.new( 0,     topY,  0)    + aimJitter * 0.4, -- Top of head (hits over 1-block walls)
-                        Vector3.new( 0.86,  0.25,  0.86) + aimJitter * 0.3, -- Corner NE
-                        Vector3.new(-0.86,  0.25,  0.86) + aimJitter * 0.3, -- Corner NW
-                        Vector3.new( 0.86,  0.25, -0.86) + aimJitter * 0.3, -- Corner SE
-                        Vector3.new(-0.86,  0.25, -0.86) + aimJitter * 0.3, -- Corner SW
-                        Vector3.new( 0.88, -1.80,  0)    + aimJitter * 0.3, -- Lower East edge
-                        Vector3.new(-0.88, -1.80,  0)    + aimJitter * 0.3, -- Lower West edge
-                        Vector3.new( 0,    -1.80,  0.88) + aimJitter * 0.3, -- Lower South edge
-                        Vector3.new( 0,    -1.80, -0.88) + aimJitter * 0.3, -- Lower North edge
-                        Vector3.new( 0,    -3.45,  0)    + aimJitter * 0.3, -- Under-block bottom hitbox (-4.0 server box)
-                    }
+                        local primary = (chosenPart == "Head") and { headOff, bodyOff, lowOff } or { bodyOff, headOff, lowOff }
+                        local multipointEdges = {
+                            primary[1],
+                            primary[2],
+                            primary[3],
+                            Vector3.new( 0,     topY,  0)    + aimJitter * 0.4, -- Top of head (hits over 1-block walls)
+                            Vector3.new( 0.86,  0.25,  0.86) + aimJitter * 0.3, -- Corner NE
+                            Vector3.new(-0.86,  0.25,  0.86) + aimJitter * 0.3, -- Corner NW
+                            Vector3.new( 0.86,  0.25, -0.86) + aimJitter * 0.3, -- Corner SE
+                            Vector3.new(-0.86,  0.25, -0.86) + aimJitter * 0.3, -- Corner SW
+                            Vector3.new( 0.88, -1.80,  0)    + aimJitter * 0.3, -- Lower East edge
+                            Vector3.new(-0.88, -1.80,  0)    + aimJitter * 0.3, -- Lower West edge
+                            Vector3.new( 0,    -1.80,  0.88) + aimJitter * 0.3, -- Lower South edge
+                            Vector3.new( 0,    -1.80, -0.88) + aimJitter * 0.3, -- Lower North edge
+                            Vector3.new( 0,    -3.45,  0)    + aimJitter * 0.3, -- Under-block bottom hitbox (-4.0 server box)
+                        }
 
-                    local unitDir = nil
-                    local hitDist = nil
-                    local hitPartName = nil
+                        local uDir, hDist, hPart = nil, nil, nil
+                        local wallBlocked = false
 
-                    local hadGeoHit = false
-                    local hadWallBlock = false
-
-                    if MinecraftMeleeGeometry and MinecraftMeleeGeometry.Hit then
-                        for _, off in ipairs(multipointEdges) do
-                            local candDir = ((targetHitPos + off) - eye).Unit
-                            -- Always pass the server's exact 9.600000000000001 reach constant to Hit()
-                            local d, hp = MinecraftMeleeGeometry.Hit(
-                                eye,
-                                candDir,
-                                targetHitPos,
-                                targetSneaking,
-                                9.600000000000001
-                            )
-                            if d and d <= maxAllowedReach then
-                                hadGeoHit = true
-                                if isLineOfSightClear(eye, candDir, d) then
-                                    unitDir = candDir
-                                    hitDist = d
-                                    hitPartName = hp or chosenPart
-                                    break
-                                else
-                                    hadWallBlock = true
+                        if MinecraftMeleeGeometry and MinecraftMeleeGeometry.Hit then
+                            for _, off in ipairs(multipointEdges) do
+                                local candDir = ((pos + off) - eye).Unit
+                                local d, hp = MinecraftMeleeGeometry.Hit(
+                                    eye,
+                                    candDir,
+                                    pos,
+                                    sneaking,
+                                    9.600000000000001
+                                )
+                                if d and d <= maxAllowedReach then
+                                    if isLineOfSightClear(eye, candDir, d) then
+                                        uDir = candDir
+                                        hDist = d
+                                        hPart = hp or chosenPart
+                                        wallBlocked = false
+                                        break
+                                    else
+                                        wallBlocked = true
+                                    end
                                 end
                             end
                         end
+                        return uDir, hDist, hPart, wallBlocked
                     end
 
-                    if not (unitDir and hitDist and hitDist <= maxAllowedReach) then
-                        if CFG.hitFailNotifs and hadWallBlock then
-                            if isBacktracking then
-                                showHitFailureNotification("Backtrack Wall Obstructed", "Line of sight to past ghost blocked by wall/block")
-                            else
-                                showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
+                    local curDist = (tRoot.Position - myRoot.Position).Magnitude
+                    local unitDir, hitDist, hitPartName, hadWallBlock = nil, nil, nil, false
+
+                    -- Step 1: If target is in normal reach, attempt direct hit at current position
+                    if curDist <= maxAllowedReach then
+                        unitDir, hitDist, hitPartName, hadWallBlock = scanGeometryHit(tRoot.Position, targetSneaking)
+                    end
+
+                    -- Step 2: If current position is out of reach or wall-blocked, test recent backtrack history
+                    if not unitDir and CFG.backtrackEnabled and targetPlr then
+                        local hist = backtrackHistory[targetPlr]
+                        if hist and #hist > 0 then
+                            local closestTickDist = math.huge
+                            for _, tick in ipairs(hist) do
+                                local tickDist = (tick.pos - myRoot.Position).Magnitude
+                                if tickDist < closestTickDist then
+                                    closestTickDist = tickDist
+                                end
+                                if tickDist <= maxAllowedReach then
+                                    local bDir, bDist, bPart, bWall = scanGeometryHit(tick.pos, tick.sneaking)
+                                    if bDir and bDist then
+                                        unitDir = bDir
+                                        hitDist = bDist
+                                        hitPartName = bPart
+                                        targetHitPos = tick.pos
+                                        targetHitTime = tick.serverTime
+                                        targetSneaking = tick.sneaking
+                                        isBacktracking = true
+                                        hadWallBlock = false
+                                        break
+                                    elseif bWall then
+                                        hadWallBlock = true
+                                    end
+                                end
+                            end
+
+                            if not unitDir and CFG.hitFailNotifs then
+                                if curDist > maxAllowedReach then
+                                    showHitFailureNotification("Backtrack Out of Reach", string.format("Past ticks expired / closest was %.1fm (max %.1fm, %dms window)", closestTickDist, maxAllowedReach, CFG.backtrackMs or 150))
+                                elseif hadWallBlock then
+                                    showHitFailureNotification("Backtrack Wall Obstructed", "Line of sight to past ghost blocked by wall/block")
+                                end
+                            end
+                        else
+                            if curDist > maxAllowedReach and CFG.hitFailNotifs then
+                                showHitFailureNotification("Backtrack No History", string.format("Target has no buffered latency ticks (%.1fm away)", curDist))
                             end
                         end
+                    elseif not unitDir and hadWallBlock and CFG.hitFailNotifs then
+                        showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
                     end
 
                     -- Strictly require a valid MinecraftMeleeGeometry intersection within <= maxAllowedReach (<= 9.5)
@@ -4956,7 +5032,7 @@ trackConn(RunService.Heartbeat:Connect(function()
     local maxAge = math.clamp((CFG.backtrackMs or 150) / 1000, 0.05, 0.35)
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= lp and plr.Character and canAttackTarget(plr.Character) then
+        if plr ~= lp and plr.Character then
             local char = plr.Character
             local root = char:FindFirstChild("HumanoidRootPart")
             local hum = char:FindFirstChildOfClass("Humanoid")
@@ -4984,6 +5060,69 @@ trackConn(RunService.Heartbeat:Connect(function()
         else
             backtrackHistory[plr] = nil
         end
+    end
+
+    -- Continuous CS:GO / Minecraft HvH Backtrack Visuals (Smooth Latency Ghost Trail)
+    if CFG.backtrackVisuals and CFG.backtrackEnabled then
+        local myChar = lp.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            local bestChar = nil
+            local bestPlr = nil
+            local bestDist = 32
+
+            -- Priority 1: Current locked target in Kill Aura
+            if targetHighlight and targetHighlight.Adornee and targetHighlight.Enabled then
+                local candChar = targetHighlight.Adornee
+                local candRoot = candChar:FindFirstChild("HumanoidRootPart")
+                local candHum = candChar:FindFirstChildOfClass("Humanoid")
+                if candRoot and candHum and candHum.Health > 0 then
+                    local candPlr = Players:GetPlayerFromCharacter(candChar)
+                    if candPlr and backtrackHistory[candPlr] and #backtrackHistory[candPlr] > 0 then
+                        bestChar = candChar
+                        bestPlr = candPlr
+                        bestDist = (candRoot.Position - myRoot.Position).Magnitude
+                    end
+                end
+            end
+
+            -- Priority 2: Closest enemy within 32 studs with recorded backtrack history
+            if not bestChar then
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= lp and plr.Character then
+                        local root = plr.Character:FindFirstChild("HumanoidRootPart")
+                        local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                        if root and hum and hum.Health > 0 then
+                            local d = (root.Position - myRoot.Position).Magnitude
+                            if d < bestDist then
+                                local hist = backtrackHistory[plr]
+                                if hist and #hist > 0 then
+                                    bestDist = d
+                                    bestChar = plr.Character
+                                    bestPlr = plr
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            if bestChar and bestPlr then
+                local hist = backtrackHistory[bestPlr]
+                if hist and #hist > 0 then
+                    local oldestTick = hist[#hist]
+                    updateBacktrackGhost(bestChar, oldestTick.cf)
+                else
+                    cleanupBacktrackGhost()
+                end
+            else
+                cleanupBacktrackGhost()
+            end
+        else
+            cleanupBacktrackGhost()
+        end
+    else
+        cleanupBacktrackGhost()
     end
 end))
 
