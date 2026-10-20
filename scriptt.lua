@@ -3713,6 +3713,8 @@ task.spawn(function()
         return false
     end
 
+    local isMobileDevice = (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled) or (not UserInputService.MouseEnabled)
+
     local function getCenter(guiObject)
         local inset = GuiService:GetGuiInset()
         local pos = guiObject.AbsolutePosition
@@ -3720,21 +3722,48 @@ task.spawn(function()
         return math.floor(pos.X + size.X / 2 + inset.X), math.floor(pos.Y + size.Y / 2 + inset.Y)
     end
 
-    local function moveMouseTo(guiObject)
-        local x, y = getCenter(guiObject)
-        if mousemoveabs then pcall(mousemoveabs, x, y) end
-        if VIM then pcall(function() VIM:SendMouseMoveEvent(x, y, game) end) end
-        return x, y
-    end
-
     local function clickGui(guiObject, holdTime)
         if not guiObject or not guiObject.Visible then return end
-        local x, y = moveMouseTo(guiObject)
+
+        -- 1. Universal executor firesignal (100% crash-free across all executors on Android/iOS/PC)
+        if firesignal then
+            pcall(function() firesignal(guiObject.Activated) end)
+            pcall(function() firesignal(guiObject.MouseButton1Click) end)
+            pcall(function() firesignal(guiObject.MouseButton1Down) end)
+            if holdTime and holdTime > 0 then task.wait(holdTime) end
+            pcall(function() firesignal(guiObject.MouseButton1Up) end)
+            return
+        end
+
+        local x, y = getCenter(guiObject)
+
+        -- 2. Mobile fallback: VirtualUser (native Roblox service, crash-free on Android/iOS)
+        if isMobileDevice then
+            if VirtualUser then
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:Button1Down(Vector2.new(x, y))
+                    if holdTime and holdTime > 0 then task.wait(holdTime) end
+                    VirtualUser:Button1Up(Vector2.new(x, y))
+                end)
+            end
+            return
+        end
+
+        -- 3. Desktop PC only: VIM / mouse1click (Safe on Windows, NEVER called on Mobile to prevent SIGSEGV)
         if VIM then
             pcall(function()
+                VIM:SendMouseMoveEvent(x, y, game)
                 VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
-                task.wait(holdTime or 0.04)
+                if holdTime and holdTime > 0 then task.wait(holdTime) end
                 VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+            end)
+        elseif VirtualUser then
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:Button1Down(Vector2.new(x, y))
+                if holdTime and holdTime > 0 then task.wait(holdTime) end
+                VirtualUser:Button1Up(Vector2.new(x, y))
             end)
         elseif mouse1click then
             pcall(mouse1click)
@@ -3748,7 +3777,36 @@ task.spawn(function()
         local viewport = cam and cam.ViewportSize or Vector2.new(1280, 720)
         local x = math.floor(viewport.X * 0.5)
         local y = math.floor(viewport.Y * 0.5)
-        if VIM then pcall(function() VIM:SendMouseButtonEvent(x, y, 0, pressed, game, 0) end) end
+
+        if isMobileDevice then
+            -- Mobile: use VirtualUser (native, zero crash risk on mobile Android/iOS)
+            if VirtualUser then
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    if pressed then
+                        VirtualUser:Button1Down(Vector2.new(x, y))
+                    else
+                        VirtualUser:Button1Up(Vector2.new(x, y))
+                    end
+                end)
+            end
+        else
+            -- Desktop PC: VIM is safe on Windows
+            if VIM then
+                pcall(function()
+                    VIM:SendMouseButtonEvent(x, y, 0, pressed, game, 0)
+                end)
+            elseif VirtualUser then
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    if pressed then
+                        VirtualUser:Button1Down(Vector2.new(x, y))
+                    else
+                        VirtualUser:Button1Up(Vector2.new(x, y))
+                    end
+                end)
+            end
+        end
     end
 
     local function releaseHold() setHold(false) end
@@ -3788,8 +3846,9 @@ task.spawn(function()
 
             if shakeBtn and shakeBtn.Visible then
                 releaseHold()
-                clickGui(shakeBtn, 0.04)
+                -- Always fire remote directly to shake immediately on the server
                 if R_FishShake then pcall(function() R_FishShake:FireServer() end) end
+                clickGui(shakeBtn, 0.04)
                 task.wait(0.12)
             elseif fishBar and fishBar.Visible then
                 fishingBusy = true
@@ -3810,10 +3869,12 @@ task.spawn(function()
                 releaseHold()
                 if os.clock() - lastCastTime > 1.5 and not getFishingState() and not isPostCatchRunning then
                     lastCastTime = os.clock()
-                    if castBtn and castBtn.Visible then
-                        clickGui(castBtn, 0.28)
-                    elseif R_FishCast then
+                    -- Always fire remote directly to cast immediately without relying on mouse hold
+                    if R_FishCast then
                         pcall(function() R_FishCast:FireServer(0.72) end)
+                    end
+                    if castBtn and castBtn.Visible then
+                        clickGui(castBtn, 0.15)
                     end
                     task.wait(0.35)
                 end
