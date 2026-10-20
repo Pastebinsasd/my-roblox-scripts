@@ -1,0 +1,4903 @@
+--[[
+    ========================================================================
+    ⚡ MID HUB — ⚔️1.8 PVP CLUB [HVH EDITION: KILL AURA, AUTO TRAP & YAW] ⚡
+    ========================================================================
+    Supported Game: ⚔️1.8 PVP Club / Duels / BoxPvP (PlaceId: 102518817130593)
+    Official Hub:   https://github.com/Pastebinsasd/my-roblox-scripts
+    Gateway:        https://fluzzy.kwierzchowski565.workers.dev/?game=mcpvp
+    Discord:        https://discord.gg/h2xwyETur
+
+    ⭐ HVH FEATURES INCLUDED:
+      [+] Interactive Draggable KEYBINDS HUD (Click key pill to rebind, live ON/OFF badges, Minimize "-")
+      [+] Custom HvH Toggle Notifications (Slide-in ON/OFF alerts + Sound + Maclib Notify)
+      [+] Silent Kill Aura (360° Head/Body Hitbox, Reach Expander, Auto-BlockHit, Target Strafe)
+      [+] Anti-Aim & Yaw Controller (360° Spinbot, Jitter Desync, Backwards Yaw, Target Lock Yaw, Twerk/Sneak Spam)
+      [+] Auto Trap / Auto Box Enemy (Instant 3.2-Grid Cobblestone Cage + Roof Cap + Auto Tool Swap)
+      [+] Auto Break / Self-Unbox (Auto Pickaxe Mine Escape) & GodBridge / Scaffold
+      [+] True Anti-Knockback / Velocity (0%–100% Horizontal & Vertical via MinecraftKnockbackMotion Hook)
+      [+] NoSlowdown (No Cobweb Slow, No SoulSand Slow, Move Fast While Eating Gapple / Blocking / Bow)
+      [+] Speed, Bhop, Air Strafe, Flight, Noclip & Auto Sprint
+      [+] Auto Golden Apple & Silent Bow Aimbot
+      [+] Cosmetics Unlocker (All Sword Skins, Particle Auras & Minecraft Skins) + 2D HvH ESP
+    ========================================================================
+]]
+
+repeat task.wait() until game:IsLoaded()
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local HttpService       = game:GetService("HttpService")
+local TweenService      = game:GetService("TweenService")
+local CoreGui           = game:GetService("CoreGui")
+
+local lp = Players.LocalPlayer
+
+local fRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+local fGetHwid = gethwid or (syn and syn.get_hwid) or get_hwid or (function() return tostring(lp.UserId) end)
+local fSetClipboard = setclipboard or toclipboard or (syn and syn.write_clipboard) or set_clipboard
+local fGetClipboard = getclipboard or (syn and syn.get_clipboard) or nil
+local fIsFile = isfile or (function() return false end)
+local fReadFile = readfile or (function() return nil end)
+local fWriteFile = writefile or (function() end)
+
+local API_KEY_URL   = "https://fluzzy.kwierzchowski565.workers.dev"
+local GATEWAY_URL   = "https://fluzzy.kwierzchowski565.workers.dev/?game=mcpvp"
+local DISCORD_LINK  = "https://discord.gg/h2xwyETur"
+local KEY_FILE      = "MidHub_Key_MinecraftPvP.txt"
+
+local function getGuiContainer()
+    local ok, res = pcall(function()
+        if gethui then return gethui() end
+        if syn and syn.protect_gui then
+            local g = Instance.new("Folder")
+            syn.protect_gui(g)
+            g.Parent = CoreGui
+            return g
+        end
+        return CoreGui
+    end)
+    return (ok and res) or lp:WaitForChild("PlayerGui")
+end
+
+local function verifyKey(key)
+    if not key or key == "" then return false, "Key cannot be empty." end
+    local clean = tostring(key):gsub("%s+", ""):upper()
+
+    if clean == "MID-DEV" or clean == "MID-TEST" or clean == "DEV" or clean == "FREE" or lp.UserId == 10645138452 or lp.Name == "SonglerenUe" then
+        return true, "Developer Access Granted! Welcome to Mid Hub."
+    end
+
+    local hwid = (type(fGetHwid) == "function" and fGetHwid()) or tostring(lp.UserId)
+    local url = string.format("%s/verify?key=%s&hwid=%s&userid=%s&game=mcpvp", API_KEY_URL, clean, hwid, tostring(lp.UserId))
+    
+    local success, response = pcall(function()
+        if fRequest then
+            return fRequest({ Url = url, Method = "GET" })
+        else
+            return { Body = game:HttpGet(url) }
+        end
+    end)
+
+    if success and response and response.Body then
+        local ok, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
+        if ok and data and data.valid == true then
+            return true, data.message or "Key verified! Welcome to Mid Hub."
+        else
+            return false, (data and data.message) or "Invalid key! Get key at fluzzy.kwierzchowski565.workers.dev"
+        end
+    end
+    return false, "Connection to key server failed."
+end
+
+local function makeDraggable(guiObject, dragHandle)
+    dragHandle = dragHandle or guiObject
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local activeInput = nil
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+            activeInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input == activeInput or input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    local function endDrag(input)
+        if input == activeInput or input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            activeInput = nil
+        end
+    end
+
+    UserInputService.InputEnded:Connect(endDrag)
+end
+
+local function createKeyModal(onSuccessCallback)
+    local keyGui = Instance.new("ScreenGui")
+    keyGui.Name = "MidHub_KeySystem_MinecraftPvP"
+    keyGui.ResetOnSpawn = false
+    keyGui.DisplayOrder = 9999999
+    keyGui.Parent = getGuiContainer()
+
+    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+    local kWidth = math.clamp(math.floor(vp.X - 24), 300, 360)
+    local kHeight = math.clamp(math.floor(vp.Y - 24), 340, 420)
+
+    local KeyFrame = Instance.new("Frame")
+    KeyFrame.Name = "MID_HUB_KeyFrame"
+    KeyFrame.Size = UDim2.fromOffset(kWidth, kHeight)
+    KeyFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    KeyFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    KeyFrame.BackgroundColor3 = Color3.fromRGB(17, 18, 19)
+    KeyFrame.BorderSizePixel = 0
+    KeyFrame.ClipsDescendants = true
+    KeyFrame.Parent = keyGui
+
+    local KeyCorner = Instance.new("UICorner")
+    KeyCorner.CornerRadius = UDim.new(0, 20)
+    KeyCorner.Parent = KeyFrame
+
+    local KeyStroke = Instance.new("UIStroke")
+    KeyStroke.Color = Color3.fromRGB(168, 85, 247)
+    KeyStroke.Thickness = 1.5
+    KeyStroke.Parent = KeyFrame
+
+    local KeyDragArea = Instance.new("Frame")
+    KeyDragArea.Name = "KeyDragArea"
+    KeyDragArea.Size = UDim2.new(1, 0, 0, 42)
+    KeyDragArea.BackgroundTransparency = 1
+    KeyDragArea.Parent = KeyFrame
+
+    makeDraggable(KeyFrame, KeyDragArea)
+
+    local HeaderTitle = Instance.new("TextLabel")
+    HeaderTitle.Name = "Title"
+    HeaderTitle.Size = UDim2.new(1, -40, 0, 28)
+    HeaderTitle.Position = UDim2.fromOffset(24, 18)
+    HeaderTitle.BackgroundTransparency = 1
+    HeaderTitle.Text = "MID HUB"
+    HeaderTitle.Font = Enum.Font.GothamBold
+    HeaderTitle.TextSize = 22
+    HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+    HeaderTitle.Parent = KeyFrame
+
+    local HeaderSub = Instance.new("TextLabel")
+    HeaderSub.Name = "Subtitle"
+    HeaderSub.Size = UDim2.new(1, -40, 0, 18)
+    HeaderSub.Position = UDim2.fromOffset(24, 46)
+    HeaderSub.BackgroundTransparency = 1
+    HeaderSub.Text = "Key System — Minecraft PvP [HvH]"
+    HeaderSub.Font = Enum.Font.Gotham
+    HeaderSub.TextSize = 13
+    HeaderSub.TextColor3 = Color3.fromRGB(168, 85, 247)
+    HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
+    HeaderSub.Parent = KeyFrame
+
+    local KeyLabel = Instance.new("TextLabel")
+    KeyLabel.Name = "KeyLabel"
+    KeyLabel.Size = UDim2.new(1, -48, 0, 16)
+    KeyLabel.Position = UDim2.fromOffset(24, 82)
+    KeyLabel.BackgroundTransparency = 1
+    KeyLabel.Text = "Access Key"
+    KeyLabel.Font = Enum.Font.GothamBold
+    KeyLabel.TextSize = 13
+    KeyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    KeyLabel.Parent = KeyFrame
+
+    local KeyField = Instance.new("Frame")
+    KeyField.Name = "KeyField"
+    KeyField.Size = UDim2.new(1, -48, 0, 46)
+    KeyField.Position = UDim2.fromOffset(24, 104)
+    KeyField.BackgroundColor3 = Color3.fromRGB(26, 27, 29)
+    KeyField.BorderSizePixel = 0
+    KeyField.Parent = KeyFrame
+
+    local KeyFieldCorner = Instance.new("UICorner")
+    KeyFieldCorner.CornerRadius = UDim.new(0, 10)
+    KeyFieldCorner.Parent = KeyField
+
+    local KeyFieldStroke = Instance.new("UIStroke")
+    KeyFieldStroke.Color = Color3.fromRGB(44, 46, 49)
+    KeyFieldStroke.Thickness = 1
+    KeyFieldStroke.Parent = KeyField
+
+    local KeyBox = Instance.new("TextBox")
+    KeyBox.Name = "KeyBox"
+    KeyBox.Size = UDim2.new(1, -84, 1, 0)
+    KeyBox.Position = UDim2.fromOffset(12, 0)
+    KeyBox.BackgroundTransparency = 1
+    KeyBox.PlaceholderText = "Enter MID-... Key"
+    KeyBox.PlaceholderColor3 = Color3.fromRGB(115, 121, 130)
+    KeyBox.Text = ""
+    KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyBox.Font = Enum.Font.Gotham
+    KeyBox.TextSize = 13
+    KeyBox.TextXAlignment = Enum.TextXAlignment.Left
+    KeyBox.ClearTextOnFocus = false
+    KeyBox.Parent = KeyField
+
+    local PasteBtn = Instance.new("TextButton")
+    PasteBtn.Name = "PasteBtn"
+    PasteBtn.Size = UDim2.fromOffset(60, 30)
+    PasteBtn.Position = UDim2.new(1, -68, 0.5, -15)
+    PasteBtn.BackgroundColor3 = Color3.fromRGB(36, 35, 48)
+    PasteBtn.BorderSizePixel = 0
+    PasteBtn.Text = "📋 Paste"
+    PasteBtn.TextColor3 = Color3.fromRGB(200, 190, 255)
+    PasteBtn.Font = Enum.Font.GothamBold
+    PasteBtn.TextSize = 11
+    PasteBtn.Parent = KeyField
+
+    local PasteCorner = Instance.new("UICorner")
+    PasteCorner.CornerRadius = UDim.new(0, 7)
+    PasteCorner.Parent = PasteBtn
+
+    PasteBtn.MouseButton1Click:Connect(function()
+        local clip = nil
+        if fGetClipboard then
+            pcall(function() clip = fGetClipboard() end)
+        end
+        if clip and #clip > 0 then
+            KeyBox.Text = tostring(clip):gsub("%s+", "")
+            PasteBtn.Text = "✓"
+            task.delay(1.5, function() if PasteBtn then PasteBtn.Text = "📋 Paste" end end)
+        else
+            PasteBtn.Text = "Empty"
+            task.delay(1.2, function() if PasteBtn then PasteBtn.Text = "📋 Paste" end end)
+        end
+    end)
+
+    local StatusRow = Instance.new("Frame")
+    StatusRow.Name = "StatusRow"
+    StatusRow.Size = UDim2.new(1, -48, 0, 20)
+    StatusRow.Position = UDim2.fromOffset(24, 156)
+    StatusRow.BackgroundTransparency = 1
+    StatusRow.Parent = KeyFrame
+
+    local ErrorLabel = Instance.new("TextLabel")
+    ErrorLabel.Name = "ErrorLabel"
+    ErrorLabel.Size = UDim2.new(1, 0, 1, 0)
+    ErrorLabel.BackgroundTransparency = 1
+    ErrorLabel.Text = ""
+    ErrorLabel.Font = Enum.Font.Gotham
+    ErrorLabel.TextSize = 12
+    ErrorLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+    ErrorLabel.TextXAlignment = Enum.TextXAlignment.Left
+    ErrorLabel.Parent = StatusRow
+
+    -- Get Key Button
+    local GetKeyBtn = Instance.new("TextButton")
+    GetKeyBtn.Name = "GetKeyBtn"
+    GetKeyBtn.Size = UDim2.new(1, -48, 0, 36)
+    GetKeyBtn.Position = UDim2.fromOffset(24, 184)
+    GetKeyBtn.BackgroundColor3 = Color3.fromRGB(26, 27, 29)
+    GetKeyBtn.BorderSizePixel = 0
+    GetKeyBtn.Text = "🔗  Get Key Link (Copy)"
+    GetKeyBtn.TextColor3 = Color3.fromRGB(168, 85, 247)
+    GetKeyBtn.Font = Enum.Font.GothamBold
+    GetKeyBtn.TextSize = 13
+    GetKeyBtn.Parent = KeyFrame
+
+    local GetKeyCorner = Instance.new("UICorner")
+    GetKeyCorner.CornerRadius = UDim.new(0, 10)
+    GetKeyCorner.Parent = GetKeyBtn
+
+    local GetKeyStroke = Instance.new("UIStroke")
+    GetKeyStroke.Color = Color3.fromRGB(168, 85, 247)
+    GetKeyStroke.Thickness = 1
+    GetKeyStroke.Parent = GetKeyBtn
+
+    GetKeyBtn.MouseButton1Click:Connect(function()
+        if fSetClipboard then
+            fSetClipboard(GATEWAY_URL)
+            GetKeyBtn.Text = "✓ Copied to Clipboard!"
+            task.delay(2, function()
+                if GetKeyBtn then GetKeyBtn.Text = "🔗  Get Key Link (Copy)" end
+            end)
+        end
+    end)
+
+    -- Submit Button
+    local SubmitBtn = Instance.new("TextButton")
+    SubmitBtn.Name = "SubmitBtn"
+    SubmitBtn.Size = UDim2.new(1, -48, 0, 44)
+    SubmitBtn.Position = UDim2.fromOffset(24, 230)
+    SubmitBtn.BackgroundColor3 = Color3.fromRGB(168, 85, 247)
+    SubmitBtn.BorderSizePixel = 0
+    SubmitBtn.Text = "Submit Key"
+    SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SubmitBtn.Font = Enum.Font.GothamBold
+    SubmitBtn.TextSize = 15
+    SubmitBtn.Parent = KeyFrame
+
+    local SubmitCorner = Instance.new("UICorner")
+    SubmitCorner.CornerRadius = UDim.new(0, 12)
+    SubmitCorner.Parent = SubmitBtn
+
+    -- Discord Button
+    local DiscordRowBtn = Instance.new("TextButton")
+    DiscordRowBtn.Name = "DiscordRowBtn"
+    DiscordRowBtn.Size = UDim2.new(1, -48, 0, 36)
+    DiscordRowBtn.Position = UDim2.fromOffset(24, 284)
+    DiscordRowBtn.BackgroundColor3 = Color3.fromRGB(26, 27, 29)
+    DiscordRowBtn.BorderSizePixel = 0
+    DiscordRowBtn.Text = "💬  Join Discord"
+    DiscordRowBtn.TextColor3 = Color3.fromRGB(160, 164, 171)
+    DiscordRowBtn.Font = Enum.Font.GothamMedium
+    DiscordRowBtn.TextSize = 13
+    DiscordRowBtn.Parent = KeyFrame
+
+    local DiscCorner = Instance.new("UICorner")
+    DiscCorner.CornerRadius = UDim.new(0, 10)
+    DiscCorner.Parent = DiscordRowBtn
+
+    DiscordRowBtn.MouseButton1Click:Connect(function()
+        if fSetClipboard then fSetClipboard(DISCORD_LINK) end
+        DiscordRowBtn.Text = "✓ Discord Link Copied!"
+        task.delay(2, function()
+            if DiscordRowBtn then DiscordRowBtn.Text = "💬  Join Discord" end
+        end)
+    end)
+
+    local function attemptAuth(enteredKey)
+        ErrorLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
+        ErrorLabel.Text = "Verifying key with server..."
+        SubmitBtn.Text = "Verifying..."
+        SubmitBtn.Active = false
+
+        task.spawn(function()
+            local ok, msg = verifyKey(enteredKey)
+            if ok then
+                ErrorLabel.TextColor3 = Color3.fromRGB(168, 85, 247)
+                ErrorLabel.Text = "Success! Loading..."
+                SubmitBtn.Text = "✓ Verified"
+                pcall(function() fWriteFile(KEY_FILE, tostring(enteredKey):gsub("%s+", ""):upper()) end)
+                task.wait(0.5)
+                keyGui:Destroy()
+                if onSuccessCallback then onSuccessCallback() end
+            else
+                ErrorLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+                ErrorLabel.Text = msg or "Verification failed."
+                SubmitBtn.Text = "Submit Key"
+                SubmitBtn.Active = true
+            end
+        end)
+    end
+
+    SubmitBtn.MouseButton1Click:Connect(function()
+        attemptAuth(KeyBox.Text)
+    end)
+
+    KeyBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then attemptAuth(KeyBox.Text) end
+    end)
+
+    -- Auto-check cached key from file
+    if fIsFile and fIsFile(KEY_FILE) then
+        local cachedKey = fReadFile(KEY_FILE)
+        if cachedKey and #cachedKey > 5 then
+            KeyBox.Text = cachedKey
+            task.spawn(function()
+                attemptAuth(cachedKey)
+            end)
+        end
+    end
+end
+
+-- =========================================================================
+-- LAUNCH MINECRAFT PVP HVH SUITE
+-- =========================================================================
+createKeyModal(function()
+    print("[Mid Hub] Minecraft PvP verified successfully. Launching Suite...")
+
+repeat task.wait() until game:IsLoaded()
+
+local Players             = game:GetService("Players")
+local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local RunService          = game:GetService("RunService")
+local UserInputService    = game:GetService("UserInputService")
+local TweenService        = game:GetService("TweenService")
+local HttpService         = game:GetService("HttpService")
+local CoreGui             = game:GetService("CoreGui")
+
+local lp = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Clean up previous live-reload or re-execution
+local ENV = (getgenv and getgenv()) or _G
+if ENV.__MIDHUB_MCHVH_CLEANUP then
+    pcall(ENV.__MIDHUB_MCHVH_CLEANUP)
+end
+
+local connections = {}
+local function trackConn(conn)
+    if conn then
+        table.insert(connections, conn)
+    end
+    return conn
+end
+
+local function getGuiContainer()
+    local ok, res = pcall(function()
+        if gethui then return gethui() end
+        return lp:WaitForChild("PlayerGui")
+    end)
+    return (ok and res) or lp:WaitForChild("PlayerGui")
+end
+
+-- ========================================================================
+-- 📦 GAME REMOTES & MODULES
+-- ========================================================================
+local MinecraftCombat    = ReplicatedStorage:WaitForChild("MinecraftCombat", 10)
+local AttackRemote       = MinecraftCombat and MinecraftCombat:WaitForChild("Attack", 5)
+local BlockRemote        = MinecraftCombat and MinecraftCombat:WaitForChild("Block", 5)
+local SprintRemote       = MinecraftCombat and MinecraftCombat:WaitForChild("Sprint", 5)
+
+local BuildingAction     = ReplicatedStorage:WaitForChild("BuildingAction", 10)
+local MinecraftBowAction = ReplicatedStorage:WaitForChild("MinecraftBowAction", 10)
+local EatGoldenApple     = ReplicatedStorage:WaitForChild("EatGoldenApple", 10)
+local MinecraftSneak     = ReplicatedStorage:WaitForChild("MinecraftSneak", 10)
+local ConfirmedMeleeFlash = ReplicatedStorage:WaitForChild("ConfirmedMeleeFlash", 5)
+
+local MinecraftMeleeGeometry  = nil
+local MinecraftBlockPlacement = nil
+local MinecraftBuildLimits    = nil
+local MinecraftKnockback      = nil
+local MinecraftSoulSand       = nil
+local DuelRules               = nil
+local MeleeHitVisuals         = nil
+local CosmeticsCatalog        = nil
+
+pcall(function() MinecraftMeleeGeometry  = require(ReplicatedStorage:WaitForChild("MinecraftMeleeGeometry", 3)) end)
+pcall(function() MinecraftBlockPlacement = require(ReplicatedStorage:WaitForChild("MinecraftBlockPlacement", 3)) end)
+pcall(function() MinecraftBuildLimits    = require(ReplicatedStorage:WaitForChild("MinecraftBuildLimits", 3)) end)
+pcall(function() MinecraftKnockback      = require(ReplicatedStorage:WaitForChild("MinecraftKnockbackMotion", 3)) end)
+pcall(function() MinecraftSoulSand       = require(ReplicatedStorage:WaitForChild("MinecraftSoulSand", 3)) end)
+pcall(function() DuelRules               = require(ReplicatedStorage:WaitForChild("DuelRules", 3)) end)
+pcall(function() MeleeHitVisuals         = require(ReplicatedStorage:WaitForChild("MeleeHitVisuals", 3)) end)
+pcall(function() CosmeticsCatalog        = require(ReplicatedStorage:WaitForChild("CosmeticsCatalog", 3)) end)
+
+-- ========================================================================
+-- ⚙️ HVH CONFIGURATION & DEFAULT KEYBINDS
+-- ========================================================================
+local CFG = {
+    -- HUD & Notifications
+    showKeybindHud    = true,
+    toggleNotifs      = true,
+    notifSound        = true,
+    menuKeybind       = Enum.KeyCode.RightShift,
+
+    -- Kill Aura & Reach (AC-AURA Safe Defaults: Server Max Reach = 9.6, Max CPS = 15)
+    killAura          = false,
+    auraReach         = 9.2,
+    auraCps           = 11,
+    auraHitPart       = "Switch",
+    autoBlockHit      = false,
+    autoEquipSword    = true,
+    ignoreTeammates   = true,
+    highlightTarget   = true,
+
+    -- Critical Hits (HvH Crits)
+    criticalsEnabled  = true,
+    criticalsMode     = "Smart Fall",
+    critVisualStars   = true,
+
+    -- Target Strafe (AC Safe Bypass)
+    targetStrafe      = false,
+    strafeRadius      = 5.5,
+    strafeSpeed       = 18.0,
+    acSafeSpeed       = true,
+
+    -- Anti-Aim / Yaw / Spinbot
+    yawEnabled        = false,
+    yawMode           = "Spinbot 360°",
+    spinSpeed         = 720,
+    jitterAngle       = 75,
+    staticYawOffset   = 180,
+    sneakSpam         = false,
+    thirdPersonHvH    = false,
+
+    -- Fake Lag & Desync (HvH Choke & Ghost)
+    fakeLagEnabled    = false,
+    fakeLagMode       = "Jitter",
+    fakeLagChokeTicks = 5,
+    fakeLagGhost      = true,
+    fakeLagAcGuard    = true,
+
+    -- Backtrack (Latency Ghost Hitbox)
+    backtrackEnabled      = false,
+    backtrackMs           = 150,
+    backtrackVisuals      = true,
+
+    -- Backtrap & Knockback Deflector
+    backtrapEnabled       = false,
+    backtrapDistance      = 3.2,
+    backtrapDoubleHeight  = false,
+
+    -- Auto Trap / Block Cage
+    autoTrap          = false,
+    trapRange         = 15,
+    trapMode          = "Full Cage + Roof",
+    trapSilentSwap    = true,
+    scaffoldEnabled   = false,
+    autoBreakTrap     = false,
+
+    -- Movement & Velocity (Anti-KB, NoSlow, Anti-Lava & Anti-Void)
+    antiKnockback     = true,
+    kbHorizontalPct   = 0,
+    kbVerticalPct     = 0,
+    noSlowdown        = true,
+    antiLava          = true,
+    antiVoid          = true,
+    antiVoidMode      = "Teleport",
+    speedEnabled      = false,
+    speedValue        = 18.2,
+    noJumpDelay       = true,
+    bhopEnabled       = false,
+    alwaysSprint      = true,
+    flyEnabled        = false,
+    flySpeed          = 55,
+    noclip            = false,
+
+    -- Bow & Auto Gapple
+    autoGapple        = false,
+    gappleHpThreshold = 13,
+    bowAimbot         = false,
+    bowRange          = 85,
+
+    -- 2D Box ESP & Visuals
+    espEnabled        = true,
+    espBox2D          = true,
+    espHealthBar      = true,
+    espName           = true,
+    espDistance       = true,
+    espWeapon         = true,
+    selectedSwordSkin = "default",
+    selectedAura      = "default",
+    selectedMcSkin    = "default",
+
+    -- Ambience, Custom Skies & Weather
+    customSkyEnabled  = false,
+    selectedSky       = "Default (Minecraft)",
+    rainEnabled       = false,
+    rainDensity       = 160,
+    rainSoundEnabled  = false,
+    rainSoundVolume   = 25,
+    timeOfDayEnabled  = false,
+    timeOfDayHour     = 18.5,
+    colorCorrection   = false,
+    saturationBoost   = 0.4,
+    contrastBoost     = 0.15,
+    customFogEnabled  = false,
+    fogEndDist        = 280,
+    mobileButton      = true,
+    uiScale           = 0,
+    configNameInput   = "default",
+}
+
+-- ========================================================================
+-- 🛡️ HOOK VELOCITY (ANTI-KNOCKBACK) & NOSLOWDOWN
+-- ========================================================================
+local origKbApply   = MinecraftKnockback and MinecraftKnockback.Apply
+local origKbScale   = MinecraftKnockback and MinecraftKnockback.ScaleHorizontal
+local origReach     = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Reach) or 9.6
+local origSoulSpeed = MinecraftSoulSand and MinecraftSoulSand.SpeedScale
+local origSoulDrag  = MinecraftSoulSand and MinecraftSoulSand.Drag
+
+if MinecraftKnockback then
+    MinecraftKnockback.Apply = function(char, vel)
+        if char == lp.Character and CFG.antiKnockback then
+            local hScale = math.clamp(CFG.kbHorizontalPct / 100, 0, 1)
+            local vScale = math.clamp(CFG.kbVerticalPct / 100, 0, 1)
+            if hScale <= 0.01 and vScale <= 0.01 then
+                return
+            end
+            vel = Vector3.new(vel.X * hScale, vel.Y * vScale, vel.Z * hScale)
+        end
+        return origKbApply(char, vel)
+    end
+
+    MinecraftKnockback.ScaleHorizontal = function(char, scale)
+        if char == lp.Character and CFG.antiKnockback then
+            return
+        end
+        return origKbScale(char, scale)
+    end
+end
+
+local function updateNoSlowPatches()
+    if MinecraftSoulSand then
+        MinecraftSoulSand.SpeedScale = CFG.noSlowdown and 1 or (origSoulSpeed or 0.4)
+        MinecraftSoulSand.Drag       = CFG.noSlowdown and 1 or (origSoulDrag or 0.5)
+    end
+end
+updateNoSlowPatches()
+
+-- ========================================================================
+-- 🌋 ANTI-LAVA & 🕳️ ANTI-VOID SYSTEM
+-- ========================================================================
+local antiLavaBarrier = nil
+local function updateAntiLavaState()
+    if not CFG.antiLava then
+        if antiLavaBarrier and antiLavaBarrier.Parent then
+            pcall(function() antiLavaBarrier:Destroy() end)
+            antiLavaBarrier = nil
+        end
+        return
+    end
+
+    local courtyard = workspace:FindFirstChild("OvergrownCourtyard")
+    local lavaPool = courtyard and courtyard:FindFirstChild("LavaPool")
+    local lavaPart = lavaPool and lavaPool:FindFirstChild("Lava")
+    if not lavaPart then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Name == "Lava" and obj.Size.Y > 2 then
+                lavaPart = obj
+                break
+            end
+        end
+    end
+
+    if lavaPart and lavaPart.Parent then
+        if not antiLavaBarrier or not antiLavaBarrier.Parent then
+            local b = Instance.new("Part")
+            b.Name = "MidHub_AntiLavaBarrier"
+            b.Size = Vector3.new(lavaPart.Size.X + 0.8, 0.4, lavaPart.Size.Z + 0.8)
+            b.Position = Vector3.new(lavaPart.Position.X, lavaPart.Position.Y + lavaPart.Size.Y / 2 + 0.2, lavaPart.Position.Z)
+            b.Transparency = 1
+            b.CanCollide = true
+            b.Anchored = true
+            b.Parent = workspace
+            antiLavaBarrier = b
+        else
+            antiLavaBarrier.Position = Vector3.new(lavaPart.Position.X, lavaPart.Position.Y + lavaPart.Size.Y / 2 + 0.2, lavaPart.Position.Z)
+            antiLavaBarrier.Size = Vector3.new(lavaPart.Size.X + 0.8, 0.4, lavaPart.Size.Z + 0.8)
+            antiLavaBarrier.CanCollide = true
+        end
+    end
+end
+updateAntiLavaState()
+
+local lastSafeGroundCFrame = nil
+local lastSafeGroundTime = 0
+local lastAntiVoidTrigger = 0
+
+-- ========================================================================
+-- 🔗 GC UPVALUE SYNC (PERFORMATTACK SEQ & BUILDING PLACE SEQ)
+-- ========================================================================
+local performAttackFn  = nil
+local setThirdPersonFn = nil
+local placeFn          = nil
+local fallbackSeq      = 2500
+local fallbackBuildSeq = 500
+local lastAuraSwingClk = 0
+local applyCriticalsPreAttack = nil
+
+local function bindClientClosures()
+    pcall(function()
+        if not getgc or not debug or not debug.getinfo then return end
+        for _, fn in ipairs(getgc(false)) do
+            if type(fn) == "function" and (not islclosure or islclosure(fn)) and (not isexecutorclosure or not isexecutorclosure(fn)) then
+                local info = debug.getinfo(fn)
+                if info then
+                    local src = tostring(info.short_src or info.source or "")
+                    if src:find("MinecraftCombatClient") then
+                        if info.name == "performAttack" then
+                            performAttackFn = fn
+                        elseif info.name == "setThirdPerson" then
+                            setThirdPersonFn = fn
+                        end
+                    elseif info.name == "place" and src:find("MinecraftBuildingClient") then
+                        placeFn = fn
+                    end
+                end
+            end
+        end
+    end)
+end
+bindClientClosures()
+trackConn(lp.CharacterAdded:Connect(function()
+    task.delay(0.5, bindClientClosures)
+end))
+
+local function getLastAttackClock()
+    local lastClk = lastAuraSwingClk
+    if performAttackFn and debug and debug.getupvalue then
+        local ok, u232 = pcall(debug.getupvalue, performAttackFn, 2)
+        if ok and type(u232) == "number" and u232 > lastClk then
+            lastClk = u232
+        end
+    end
+    return lastClk
+end
+
+local function getNextAttackSeqAndSwing(char)
+    local now = os.clock()
+    lastAuraSwingClk = now
+    if char then
+        pcall(function() char:SetAttribute("LocalAttackSwing", now) end)
+    end
+    if performAttackFn and debug and debug.getupvalue and debug.setupvalue then
+        local ok, nextSeq = pcall(function()
+            -- Upvalue 5 = u233 (isBlocking)
+            local isBlk = debug.getupvalue(performAttackFn, 5)
+            if isBlk == true then
+                debug.setupvalue(performAttackFn, 5, false)
+                if BlockRemote then BlockRemote:FireServer(false) end
+            end
+            -- Upvalue 2 = u232 (lastAttack), Upvalue 3 = u227 (lastSwing), Upvalue 4 = u284 (swingMap)
+            debug.setupvalue(performAttackFn, 2, now)
+            debug.setupvalue(performAttackFn, 3, now)
+            local swingMap = debug.getupvalue(performAttackFn, 4)
+            if type(swingMap) == "table" and char then
+                swingMap[char] = now
+            end
+            -- Upvalue 12 = u298 (attack seq counter!)
+            local curSeq = debug.getupvalue(performAttackFn, 12)
+            if type(curSeq) == "number" then
+                local s = curSeq + 1
+                debug.setupvalue(performAttackFn, 12, s)
+                return s
+            end
+            return nil
+        end)
+        if ok and type(nextSeq) == "number" then
+            return nextSeq
+        end
+    end
+    fallbackSeq = fallbackSeq + 1
+    return fallbackSeq
+end
+
+local function getNextBuildSeq()
+    local now = os.clock()
+    if placeFn and debug and debug.getupvalue and debug.setupvalue then
+        local ok, nextSeq = pcall(function()
+            debug.setupvalue(placeFn, 1, now) -- Upvalue 1 = u104 (lastPlaceClock)
+            local curSeq = debug.getupvalue(placeFn, 7) -- Upvalue 7 = u102 (build seq counter)
+            if type(curSeq) == "number" then
+                local s = curSeq + 1
+                debug.setupvalue(placeFn, 7, s)
+                return s
+            end
+            return nil
+        end)
+        if ok and type(nextSeq) == "number" then
+            return nextSeq
+        end
+    end
+    fallbackBuildSeq = fallbackBuildSeq + 1
+    return fallbackBuildSeq
+end
+
+-- ========================================================================
+-- 🛠️ HELPER FUNCTIONS & CRITICALS SYSTEM
+-- ========================================================================
+local lastCritHopTime = 0
+
+local function spawnCriticalHitEffect(targetChar)
+    if not targetChar then return end
+    local tRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso")
+    if not tRoot then return end
+
+    -- Play official Minecraft 1.8 Critical hit sound
+    pcall(function()
+        local critSound = ReplicatedStorage:FindFirstChild("CombatCriticalSound")
+        if critSound then
+            local s = critSound:Clone()
+            s.Parent = tRoot
+            s.Volume = 0.85
+            s:Play()
+            game:GetService("Debris"):AddItem(s, 1.2)
+        end
+    end)
+
+    -- Spawn Red Critical Hit Stars (rbxassetid://119054548225080)
+    pcall(function()
+        local p = Instance.new("Part")
+        p.Name = "MidHub_CritFX"
+        p.Size = Vector3.new(1.5, 2.8, 1.5)
+        p.Transparency = 1
+        p.Anchored = true
+        p.CanCollide = false
+        p.CanTouch = false
+        p.CanQuery = false
+        p.CFrame = tRoot.CFrame * CFrame.new(0, 0.72, 0)
+        p.Parent = workspace
+
+        local pe = Instance.new("ParticleEmitter")
+        pe.Name = "Critical"
+        pe.Texture = "rbxassetid://119054548225080"
+        pe.LightEmission = 1.05
+        pe.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.65),
+            NumberSequenceKeypoint.new(1, 0.2)
+        })
+        pe.Color = ColorSequence.new(Color3.fromRGB(255, 45, 45))
+        pe.Speed = NumberRange.new(3.5, 6)
+        pe.SpreadAngle = Vector2.new(180, 180)
+        pe.Lifetime = NumberRange.new(0.4, 0.7)
+        pe.Rate = 0
+        pe.Parent = p
+
+        local peExtra = Instance.new("ParticleEmitter")
+        peExtra.Name = "CriticalExtra"
+        peExtra.Texture = "rbxassetid://119054548225080"
+        peExtra.LightEmission = 0.95
+        peExtra.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.8),
+            NumberSequenceKeypoint.new(1, 0.3)
+        })
+        peExtra.Color = ColorSequence.new(Color3.fromRGB(255, 180, 60))
+        peExtra.Speed = NumberRange.new(4, 7)
+        peExtra.SpreadAngle = Vector2.new(180, 180)
+        peExtra.Lifetime = NumberRange.new(0.4, 0.8)
+        peExtra.Rate = 0
+        peExtra.Parent = p
+
+        pe:Emit(10)
+        peExtra:Emit(10)
+
+        game:GetService("Debris"):AddItem(p, 1.0)
+    end)
+end
+
+applyCriticalsPreAttack = function(myRoot, myHum, payload)
+    if not CFG.criticalsEnabled or not myRoot or not myHum then return end
+
+    local isAirborne = (myHum.FloorMaterial == Enum.Material.Air)
+    local mode = CFG.criticalsMode
+
+    if mode == "Packet" then
+        if not isAirborne then
+            -- Micro-packet vertical displacement: lifts character slightly into falling Freefall state on server
+            local origCF = myRoot.CFrame
+            local origVel = myRoot.AssemblyLinearVelocity
+            myRoot.CFrame = origCF + Vector3.new(0, 0.16, 0)
+            myRoot.AssemblyLinearVelocity = Vector3.new(origVel.X, -2.5, origVel.Z)
+            myHum:ChangeState(Enum.HumanoidStateType.Freefall)
+            if payload and payload.eye then
+                payload.eye = payload.eye + Vector3.new(0, 0.16, 0)
+            end
+            task.defer(function()
+                if myRoot and myRoot.Parent then
+                    myRoot.CFrame = origCF
+                    myRoot.AssemblyLinearVelocity = origVel
+                end
+            end)
+        end
+    elseif mode == "Mini Hop" then
+        if not isAirborne then
+            local now = os.clock()
+            if (now - lastCritHopTime) > 0.3 then
+                lastCritHopTime = now
+                myHum:ChangeState(Enum.HumanoidStateType.Jumping)
+                myHum.Jump = true
+            end
+        end
+    end
+end
+
+if ConfirmedMeleeFlash then
+    trackConn(ConfirmedMeleeFlash.OnClientEvent:Connect(function(hitModel, isCrit, isBlocked)
+        if CFG.criticalsEnabled and CFG.critVisualStars and isCrit and hitModel then
+            spawnCriticalHitEffect(hitModel)
+        end
+    end))
+end
+
+-- ========================================================================
+-- 👻 FAKE LAG GHOST (SERVER REPLICATION CHAMS)
+-- ========================================================================
+local fakeLagGhostFolder = nil
+
+local function cleanupFakeLagGhost()
+    if fakeLagGhostFolder then
+        pcall(function() fakeLagGhostFolder:Destroy() end)
+        fakeLagGhostFolder = nil
+    end
+end
+
+local function updateFakeLagGhost(targetCF, char)
+    if not CFG.fakeLagGhost or not CFG.fakeLagEnabled then
+        cleanupFakeLagGhost()
+        return
+    end
+    if not char or not targetCF then return end
+
+    local myRoot = char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    if not fakeLagGhostFolder or not fakeLagGhostFolder.Parent then
+        fakeLagGhostFolder = Instance.new("Folder")
+        fakeLagGhostFolder.Name = "MidHub_LagGhost"
+        fakeLagGhostFolder.Parent = workspace
+    end
+
+    local existingParts = fakeLagGhostFolder:GetChildren()
+    if #existingParts == 0 then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                local ghostPart = Instance.new("Part")
+                ghostPart.Name = part.Name
+                ghostPart.Size = part.Size
+                ghostPart.Anchored = true
+                ghostPart.CanCollide = false
+                ghostPart.CanTouch = false
+                ghostPart.CanQuery = false
+                ghostPart.CastShadow = false
+                ghostPart.Material = Enum.Material.SmoothPlastic
+                ghostPart.Color = Color3.fromRGB(168, 85, 247)
+                ghostPart.Transparency = 0.55
+                ghostPart.Parent = fakeLagGhostFolder
+            end
+        end
+    end
+
+    for _, ghostPart in ipairs(fakeLagGhostFolder:GetChildren()) do
+        local origPart = char:FindFirstChild(ghostPart.Name)
+        if origPart and origPart:IsA("BasePart") then
+            local relOffset = myRoot.CFrame:ToObjectSpace(origPart.CFrame)
+            ghostPart.CFrame = targetCF * relOffset
+        end
+    end
+end
+
+-- 🕒 BACKTRACK STATE & GHOST HITBOX SYSTEM
+local backtrackHistory = {}
+local backtrackGhostFolder = nil
+
+local function cleanupBacktrackGhost()
+    if backtrackGhostFolder then
+        pcall(function() backtrackGhostFolder:Destroy() end)
+        backtrackGhostFolder = nil
+    end
+end
+
+local function updateBacktrackGhost(targetChar, targetCF)
+    if not CFG.backtrackVisuals or not CFG.backtrackEnabled or not targetChar or not targetCF then
+        cleanupBacktrackGhost()
+        return
+    end
+
+    local tRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    if not tRoot then return end
+
+    if not backtrackGhostFolder or not backtrackGhostFolder.Parent then
+        backtrackGhostFolder = Instance.new("Folder")
+        backtrackGhostFolder.Name = "MidHub_BacktrackGhost"
+        backtrackGhostFolder.Parent = workspace
+    end
+
+    local existingParts = backtrackGhostFolder:GetChildren()
+    if #existingParts == 0 then
+        for _, part in ipairs(targetChar:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                local ghostPart = Instance.new("Part")
+                ghostPart.Name = part.Name
+                ghostPart.Size = part.Size
+                ghostPart.Anchored = true
+                ghostPart.CanCollide = false
+                ghostPart.CanTouch = false
+                ghostPart.CanQuery = false
+                ghostPart.CastShadow = false
+                ghostPart.Material = Enum.Material.Neon
+                ghostPart.Color = Color3.fromRGB(0, 230, 255)
+                ghostPart.Transparency = 0.55
+                ghostPart.Parent = backtrackGhostFolder
+            end
+        end
+    end
+
+    for _, ghostPart in ipairs(backtrackGhostFolder:GetChildren()) do
+        local origPart = targetChar:FindFirstChild(ghostPart.Name)
+        if origPart and origPart:IsA("BasePart") then
+            local relOffset = tRoot.CFrame:ToObjectSpace(origPart.CFrame)
+            ghostPart.CFrame = targetCF * relOffset
+        end
+    end
+end
+
+local function getChar()
+    return lp.Character
+end
+
+local function getRoot(c)
+    c = c or lp.Character
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function getHum(c)
+    c = c or lp.Character
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function findTool(toolName)
+    local c = lp.Character
+    if c and c:FindFirstChild(toolName) then
+        return c:FindFirstChild(toolName), true
+    end
+    local bp = lp:FindFirstChild("Backpack")
+    if bp and bp:FindFirstChild(toolName) then
+        return bp:FindFirstChild(toolName), false
+    end
+    return nil, false
+end
+
+local function equipToolFast(toolName)
+    local tool, alreadyEquipped = findTool(toolName)
+    if alreadyEquipped then return tool, true end
+    local c = lp.Character
+    local hum = getHum(c)
+    if tool and c and hum then
+        pcall(function() hum:EquipTool(tool) end)
+        if tool.Parent ~= c then
+            pcall(function()
+                for _, child in ipairs(c:GetChildren()) do
+                    if child:IsA("Tool") and child ~= tool then
+                        child.Parent = lp:FindFirstChild("Backpack")
+                    end
+                end
+                tool.Parent = c
+            end)
+        end
+        return tool, c:FindFirstChild(toolName) ~= nil
+    end
+    return nil, false
+end
+
+local function isInSpawnSafezone(pos)
+    -- SkySpawn lobby island is at Y = 84 (X ~ 350..400, Z ~ -10..40) where players are Immune and building is blocked
+    return pos and pos.Y > 68
+end
+
+local function canAttackTarget(targetChar)
+    if not targetChar or targetChar == lp.Character then return false end
+    local hum = targetChar:FindFirstChildOfClass("Humanoid")
+    local root = targetChar:FindFirstChild("HumanoidRootPart")
+    if not hum or hum.Health <= 0 or not root then return false end
+    -- Skip players standing up on SkySpawn safezone (Y > 68) who have Spawn Immunity
+    if isInSpawnSafezone(root.Position) and not targetChar:GetAttribute("DuelId") then
+        return false
+    end
+    if CFG.ignoreTeammates and DuelRules and DuelRules.CanDamage then
+        local ok, canDmg = pcall(DuelRules.CanDamage, lp.Character, targetChar)
+        if ok and not canDmg then
+            return false
+        end
+    end
+    return true
+end
+
+local function getClosestEnemy(maxDist)
+    local myRoot = getRoot()
+    if not myRoot then return nil, math.huge end
+
+    local bestChar = nil
+    local bestDist = maxDist or math.huge
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and plr.Character and canAttackTarget(plr.Character) then
+            local r = plr.Character:FindFirstChild("HumanoidRootPart")
+            if r then
+                local d = (r.Position - myRoot.Position).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    bestChar = plr.Character
+                end
+            end
+        end
+    end
+
+    if not bestChar then
+        for _, inst in ipairs(workspace:GetChildren()) do
+            if inst:IsA("Model") and inst ~= lp.Character and not Players:GetPlayerFromCharacter(inst) then
+                if canAttackTarget(inst) then
+                    local r = inst:FindFirstChild("HumanoidRootPart")
+                    if r then
+                        local d = (r.Position - myRoot.Position).Magnitude
+                        if d < bestDist then
+                            bestDist = d
+                            bestChar = inst
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return bestChar, bestDist
+end
+
+local function snapToGrid(pos)
+    if MinecraftBlockPlacement and MinecraftBlockPlacement.Snap then
+        return MinecraftBlockPlacement.Snap(pos)
+    end
+    return Vector3.new(
+        (math.floor(pos.X / 3.2) + 0.5) * 3.2,
+        (math.floor(pos.Y / 3.2) + 0.5) * 3.2,
+        (math.floor(pos.Z / 3.2) + 0.5) * 3.2
+    )
+end
+
+local function getEntityFeetGridCenter(rootPos)
+    -- In this game's collision system, a player standing on the floor (Y = 3.2) has HumanoidRootPart.Y = 7.2 (feet at root.Y - 4.0).
+    -- Subtracting 2.4 from rootPos.Y puts the sample point at Y = 4.8, which snaps to the exact bottom block layer (4.8) instead of floating at 8.0!
+    return snapToGrid(rootPos - Vector3.new(0, 2.4, 0))
+end
+
+local trapAnchorFolder = workspace:FindFirstChild("MidHub_TrapAnchors")
+if trapAnchorFolder then
+    pcall(function() trapAnchorFolder:Destroy() end)
+end
+trapAnchorFolder = Instance.new("Folder")
+trapAnchorFolder.Name = "MidHub_TrapAnchors"
+trapAnchorFolder.Parent = workspace
+
+local pendingTrapAnchors = {}
+
+if BuildingAction then
+    trackConn(BuildingAction.OnClientEvent:Connect(function(action, seqId, success)
+        if action == "PlaceResult" and type(seqId) == "number" then
+            if success == false and pendingTrapAnchors[seqId] then
+                pcall(function() pendingTrapAnchors[seqId]:Destroy() end)
+                pendingTrapAnchors[seqId] = nil
+            end
+        end
+    end))
+end
+
+local function isBlockAt(gridPos, ignoreAnchors)
+    local pb = workspace:FindFirstChild("PlayerBlocks")
+    if pb then
+        for _, b in ipairs(pb:GetChildren()) do
+            local pos = b:IsA("BasePart") and b.Position or b:GetPivot().Position
+            if (pos - gridPos).Magnitude < 0.8 then
+                return true
+            end
+        end
+    end
+    if not ignoreAnchors and trapAnchorFolder then
+        for _, a in ipairs(trapAnchorFolder:GetChildren()) do
+            if a:IsA("BasePart") and (a.Position - gridPos).Magnitude < 0.8 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function isOverlappingAnyPlayer(gridPos, myChar)
+    -- Server rejects placing a block if any player's Minecraft hitbox overlaps the 3.16x3.16x3.16 block bounds
+    local params = OverlapParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { myChar, workspace:FindFirstChild("PredictedBlocks"), trapAnchorFolder }
+    for _, part in ipairs(workspace:GetPartBoundsInBox(CFrame.new(gridPos), Vector3.new(3.12, 3.12, 3.12), params)) do
+        if part.CanCollide or (part.Parent and part.Parent:FindFirstChildOfClass("Humanoid")) then
+            return true
+        end
+    end
+    return false
+end
+
+local CARDINAL_NORMALS = {
+    Vector3.new( 0,  1,  0),
+    Vector3.new( 1,  0,  0),
+    Vector3.new(-1,  0,  0),
+    Vector3.new( 0,  0,  1),
+    Vector3.new( 0,  0, -1),
+    Vector3.new( 0, -1,  0),
+}
+
+-- All origin offsets have Magnitude <= 5.5 so MinecraftBlockPlacement.ValidOrigin(serverHead, origin) is ALWAYS true (<= 6.0)!
+local ORIGIN_OFFSETS = {
+    Vector3.new( 0.0,  0.0,  0.0),
+    Vector3.new( 0.0,  4.6,  0.0),
+    Vector3.new( 3.6,  3.6,  0.0),
+    Vector3.new(-3.6,  3.6,  0.0),
+    Vector3.new( 0.0,  3.6,  3.6),
+    Vector3.new( 0.0,  3.6, -3.6),
+    Vector3.new( 4.8,  1.5,  0.0),
+    Vector3.new(-4.8,  1.5,  0.0),
+    Vector3.new( 0.0,  1.5,  4.8),
+    Vector3.new( 0.0,  1.5, -4.8),
+    Vector3.new( 0.0, -2.4,  0.0),
+}
+
+local function findValidPlacementRay(headPos, targetGrid, myChar)
+    local predFolder = workspace:FindFirstChild("PredictedBlocks")
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    -- Note: trapAnchorFolder is intentionally NOT excluded here so upper cage layers (Layer 1 & Roof)
+    -- can immediately raycast against just-sent lower blocks in the same burst without waiting for server ping!
+    rayParams.FilterDescendantsInstances = predFolder and { myChar, predFolder } or { myChar }
+
+    for _, oOff in ipairs(ORIGIN_OFFSETS) do
+        local orig = headPos + oOff
+        for _, n in ipairs(CARDINAL_NORMALS) do
+            local faceCenter = targetGrid - n * 1.6
+            -- Build 5 sample points across the 3.2x3.2 supporting face so partial obstructions are bypassed
+            local t1 = (math.abs(n.Y) > 0.5) and Vector3.new(0.85, 0, 0) or Vector3.new(0, 0.85, 0)
+            local t2 = (math.abs(n.Z) > 0.5) and Vector3.new(0.85, 0, 0) or Vector3.new(0, 0, 0.85)
+            local faceSamples = {
+                faceCenter,
+                faceCenter + t1,
+                faceCenter - t1,
+                faceCenter + t2,
+                faceCenter - t2,
+            }
+            for _, samplePt in ipairs(faceSamples) do
+                local toPt = samplePt - orig
+                local dist = toPt.Magnitude
+                if dist > 0.15 and dist <= 15.8 then
+                    local unitDir = toPt.Unit
+                    local hit = workspace:Raycast(orig, unitDir * 16, rayParams)
+                    if hit and hit.Instance then
+                        local snapped = MinecraftBlockPlacement and MinecraftBlockPlacement.FromHit(hit)
+                            or snapToGrid(hit.Position + hit.Normal * 0.05)
+                        if snapped and (snapped - targetGrid).Magnitude < 0.12 then
+                            return orig, unitDir, snapped
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil, nil, nil
+end
+
+local lastBlockFireClock = 0
+local lastTrapHoldClock  = 0
+local toolBeforeTrap     = nil
+
+local function spawnTrapAnchor(seq, gridPos)
+    if not trapAnchorFolder then return end
+    local anchor = Instance.new("Part")
+    anchor.Name = "TrapAnchor_" .. tostring(seq)
+    anchor.Size = Vector3.new(3.200000047683716, 3.200000047683716, 3.200000047683716)
+    anchor.CFrame = CFrame.new(gridPos)
+    anchor.Anchored = true
+    anchor.CanCollide = false
+    anchor.CanTouch = false
+    anchor.CanQuery = true
+    anchor.Transparency = 0.72
+    anchor.Material = Enum.Material.SmoothPlastic
+    anchor.Color = Color3.fromRGB(168, 85, 247)
+    anchor.Parent = trapAnchorFolder
+    pendingTrapAnchors[seq] = anchor
+
+    task.delay(0.42, function()
+        if pendingTrapAnchors[seq] then
+            pcall(function() pendingTrapAnchors[seq]:Destroy() end)
+            pendingTrapAnchors[seq] = nil
+        end
+    end)
+end
+
+local function placeBlockAtGridPos(gridPos)
+    if not BuildingAction then return false end
+    -- Ultra-fast burst step (0.015s) — safe because MinecraftBuildingClient.place() has u104 = 0
+    local now = os.clock()
+    if now - lastBlockFireClock < 0.015 then
+        return false
+    end
+
+    local c = getChar()
+    local myRoot = getRoot(c)
+    local head = c and c:FindFirstChild("Head")
+    if not c or not myRoot or not head then return false end
+
+    if isInSpawnSafezone(myRoot.Position) then
+        return false
+    end
+    if (gridPos - myRoot.Position).Magnitude < 2.3 or (gridPos - head.Position).Magnitude > 19.5 then
+        return false
+    end
+    if isBlockAt(gridPos) then
+        return false
+    end
+    if MinecraftBuildLimits and MinecraftBuildLimits.CanPlace and not MinecraftBuildLimits.CanPlace(gridPos) then
+        return false
+    end
+    if DuelRules and DuelRules.CanBuild and not DuelRules.CanBuild(c, gridPos) then
+        return false
+    end
+    if isOverlappingAnyPlayer(gridPos, c) then
+        return false
+    end
+
+    -- Find a genuine server-verifiable (origin, unitDir) ray that hits an existing adjacent face (or just-sent burst anchor)
+    local validOrigin, validDir, confirmedGrid = findValidPlacementRay(head.Position, gridPos, c)
+    if not validOrigin or not validDir then
+        return false
+    end
+
+    local cobbleTool, wasEquipped = findTool("Cobblestone")
+    if not cobbleTool then return false end
+    local count = cobbleTool:GetAttribute("Count") or 1
+    if count <= 0 then return false end
+
+    if not wasEquipped then
+        if not CFG.trapSilentSwap then return false end
+        local curHeld = c:FindFirstChildOfClass("Tool")
+        if curHeld and curHeld.Name ~= "Cobblestone" then
+            toolBeforeTrap = curHeld.Name
+        end
+        equipToolFast("Cobblestone")
+        task.wait(0.02)
+        c = getChar()
+        head = c and c:FindFirstChild("Head")
+        if not c or not head or not c:FindFirstChild("Cobblestone") then
+            return false
+        end
+        if (validOrigin - head.Position).Magnitude > 5.8 then
+            validOrigin, validDir, confirmedGrid = findValidPlacementRay(head.Position, gridPos, c)
+            if not validOrigin or not validDir then
+                return false
+            end
+        end
+    end
+
+    local finalGrid = confirmedGrid or gridPos
+    lastBlockFireClock = os.clock()
+    lastTrapHoldClock  = os.clock()
+    local seq = getNextBuildSeq()
+
+    -- Spawn instant client-side anchor so upper cage layers & roof cap can raycast against this block on the very next millisecond!
+    spawnTrapAnchor(seq, finalGrid)
+
+    pcall(function()
+        BuildingAction:FireServer(
+            "Place",
+            validDir,
+            seq,
+            finalGrid,
+            validOrigin,
+            workspace:GetServerTimeNow()
+        )
+    end)
+
+    return true
+end
+
+local function getTrapOffsets(mode)
+    local S = 3.2
+    -- Ordered strictly bottom-to-top so every block attaches to an existing floor or lower block face!
+    -- Includes roof support blocks at (S, S*2, 0) / (-S, S*2, 0) so the center roof cap (0, S*2, 0) has a side face to attach to!
+    if mode == "Full Cage + Roof" then
+        return {
+            -- Layer 0 (Feet level Y=4.8, attaches to arena floor)
+            Vector3.new( S, 0,  0),
+            Vector3.new(-S, 0,  0),
+            Vector3.new( 0, 0,  S),
+            Vector3.new( 0, 0, -S),
+            -- Layer 1 (Head/Torso level Y=8.0, attaches to top of Layer 0)
+            Vector3.new( S, S,  0),
+            Vector3.new(-S, S,  0),
+            Vector3.new( 0, S,  S),
+            Vector3.new( 0, S, -S),
+            -- Layer 2 Support + Roof Cap (Y=11.2, support attaches to top of Layer 1, cap attaches to side of support)
+            Vector3.new( S, S * 2, 0),
+            Vector3.new( 0, S * 2, 0),
+        }
+    elseif mode == "4-Wall Ring" then
+        return {
+            Vector3.new( S, 0,  0),
+            Vector3.new(-S, 0,  0),
+            Vector3.new( 0, 0,  S),
+            Vector3.new( 0, 0, -S),
+            Vector3.new( S, S,  0),
+            Vector3.new(-S, S,  0),
+            Vector3.new( 0, S,  S),
+            Vector3.new( 0, S, -S),
+        }
+    elseif mode == "Head Trap (Roof + Upper)" then
+        return {
+            Vector3.new( S, 0,  0),
+            Vector3.new( S, S,  0),
+            Vector3.new(-S, S,  0),
+            Vector3.new( 0, S,  S),
+            Vector3.new( 0, S, -S),
+            Vector3.new( S, S * 2, 0),
+            Vector3.new( 0, S * 2, 0),
+        }
+    else
+        return {
+            Vector3.new( S, 0,  0),
+            Vector3.new(-S, 0,  0),
+            Vector3.new( 0, 0,  S),
+            Vector3.new( 0, 0, -S),
+        }
+    end
+end
+
+local function setThirdPersonView(v)
+    pcall(function()
+        local enabled = (v == true)
+        if not setThirdPersonFn then
+            bindClientClosures()
+        end
+        -- Call MinecraftCombatClient's native setThirdPerson(a1) closure so u237, 3D body visibility, and viewmodel cleanup stay in sync!
+        if setThirdPersonFn then
+            pcall(setThirdPersonFn, enabled)
+        end
+        lp:SetAttribute("ThirdPersonCamera", enabled)
+        lp:SetAttribute("CameraViewMode", enabled and 1 or 0)
+        lp.CameraMode = enabled and Enum.CameraMode.Classic or Enum.CameraMode.LockFirstPerson
+        if enabled then
+            lp.CameraMinZoomDistance = 12.8
+            lp.CameraMaxZoomDistance = 12.8
+        else
+            lp.CameraMinZoomDistance = 0.5
+            lp.CameraMaxZoomDistance = 0.5
+        end
+        local c = getChar()
+        local body = c and c:FindFirstChild("MinecraftBody")
+        if body then
+            for _, d in ipairs(body:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.LocalTransparencyModifier = enabled and 0 or 1
+                elseif d:IsA("SurfaceGui") then
+                    d.Enabled = enabled
+                end
+            end
+        end
+    end)
+end
+
+trackConn(lp.CharacterAdded:Connect(function()
+    task.delay(0.6, function()
+        if CFG.thirdPersonHvH then
+            setThirdPersonView(true)
+        end
+    end)
+end))
+
+-- Target Highlight
+local targetHighlight = Instance.new("Highlight")
+targetHighlight.Name = "MidHub_HvHTargetHighlight"
+targetHighlight.FillColor = Color3.fromRGB(244, 63, 94)
+targetHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+targetHighlight.FillTransparency = 0.5
+targetHighlight.OutlineTransparency = 0.05
+targetHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+targetHighlight.Enabled = false
+targetHighlight.Parent = getGuiContainer()
+
+-- ========================================================================
+-- 🖥️ KEYBINDS HUD + HVH TOGGLE NOTIFICATIONS (MATCHING SCREENSHOT)
+-- ========================================================================
+local oldHud = lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("MidHub_KeybindsHUD")
+if oldHud then
+    pcall(function() oldHud:Destroy() end)
+end
+
+local hudGui = Instance.new("ScreenGui")
+hudGui.Name = "MidHub_KeybindsHUD"
+hudGui.ResetOnSpawn = false
+hudGui.IgnoreGuiInset = true
+hudGui.DisplayOrder = 999990
+hudGui.Parent = lp:WaitForChild("PlayerGui")
+
+-- Notification Stack Container (Bottom-Right HvH Toast Stack)
+local notifContainer = Instance.new("Frame")
+notifContainer.Name = "NotifStack"
+notifContainer.AnchorPoint = Vector2.new(1, 1)
+notifContainer.Position = UDim2.new(1, -22, 1, -24)
+notifContainer.Size = UDim2.fromOffset(270, 360)
+notifContainer.BackgroundTransparency = 1
+notifContainer.Parent = hudGui
+
+local notifLayout = Instance.new("UIListLayout")
+notifLayout.FillDirection = Enum.FillDirection.Vertical
+notifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+notifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+notifLayout.SortOrder = Enum.SortOrder.LayoutOrder
+notifLayout.Padding = UDim.new(0, 7)
+notifLayout.Parent = notifContainer
+
+local Window = nil -- Assigned once Maclib loads
+
+local function formatKeyName(keyCode)
+    if not keyCode or keyCode == Enum.KeyCode.Unknown then
+        return "None"
+    end
+    local name = keyCode.Name
+    local shortMap = {
+        RightControl = "RCtrl",
+        LeftControl  = "LCtrl",
+        RightShift   = "RShift",
+        LeftShift    = "LShift",
+        RightAlt     = "RAlt",
+        LeftAlt      = "LAlt",
+        CapsLock     = "Caps",
+        Backquote    = "Grave",
+    }
+    return shortMap[name] or name
+end
+
+local notifSerial = 0
+local function showToggleNotification(moduleName, stateBool, keyEnum)
+    if not CFG.toggleNotifs then return end
+    notifSerial = notifSerial + 1
+
+    if CFG.notifSound then
+        pcall(function()
+            local s = ReplicatedStorage:FindFirstChild("MinecraftXPCollect") or ReplicatedStorage:FindFirstChild("CombatHitSound")
+            if s and s:IsA("Sound") then
+                local c = s:Clone()
+                c.Volume = 0.28
+                c.PlaybackSpeed = stateBool and 1.25 or 0.85
+                c.Parent = workspace.CurrentCamera
+                c:Play()
+                game:GetService("Debris"):AddItem(c, 1.5)
+            end
+        end)
+    end
+
+    local card = Instance.new("Frame")
+    card.Name = "Toast_" .. notifSerial
+    card.LayoutOrder = notifSerial
+    card.Size = UDim2.fromOffset(258, 46)
+    card.BackgroundColor3 = Color3.fromRGB(18, 17, 26)
+    card.BackgroundTransparency = 0.06
+    card.BorderSizePixel = 0
+    card.ClipsDescendants = true
+    card.Parent = notifContainer
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 9)
+    corner.Parent = card
+
+    local accentColor = stateBool and Color3.fromRGB(46, 184, 108) or Color3.fromRGB(214, 60, 74)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = accentColor
+    stroke.Thickness = 1.4
+    stroke.Transparency = 0.15
+    stroke.Parent = card
+
+    local sideBar = Instance.new("Frame")
+    sideBar.Size = UDim2.new(0, 4, 1, 0)
+    sideBar.BackgroundColor3 = accentColor
+    sideBar.BorderSizePixel = 0
+    sideBar.Parent = card
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -78, 0, 20)
+    titleLbl.Position = UDim2.fromOffset(14, 6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 13
+    titleLbl.TextColor3 = Color3.fromRGB(245, 245, 252)
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Text = moduleName
+    titleLbl.Parent = card
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, -78, 0, 16)
+    subLbl.Position = UDim2.fromOffset(14, 24)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Font = Enum.Font.Gotham
+    subLbl.TextSize = 11
+    subLbl.TextColor3 = Color3.fromRGB(165, 162, 188)
+    subLbl.TextXAlignment = Enum.TextXAlignment.Left
+    subLbl.Text = string.format("Module toggled %s [%s]", stateBool and "ON" or "OFF", formatKeyName(keyEnum))
+    subLbl.Parent = card
+
+    local pill = Instance.new("Frame")
+    pill.AnchorPoint = Vector2.new(1, 0.5)
+    pill.Position = UDim2.new(1, -10, 0.5, 0)
+    pill.Size = UDim2.fromOffset(48, 22)
+    pill.BackgroundColor3 = accentColor
+    pill.BorderSizePixel = 0
+    pill.Parent = card
+
+    local pillCorner = Instance.new("UICorner")
+    pillCorner.CornerRadius = UDim.new(1, 0)
+    pillCorner.Parent = pill
+
+    local pillTxt = Instance.new("TextLabel")
+    pillTxt.Size = UDim2.fromScale(1, 1)
+    pillTxt.BackgroundTransparency = 1
+    pillTxt.Font = Enum.Font.GothamBold
+    pillTxt.TextSize = 11
+    pillTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+    pillTxt.Text = stateBool and "ON" or "OFF"
+    pillTxt.Parent = pill
+
+    task.delay(2.4, function()
+        if card and card.Parent then
+            local tw = TweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromOffset(258, 0)
+            })
+            tw:Play()
+            task.wait(0.26)
+            if card and card.Parent then
+                card:Destroy()
+            end
+        end
+    end)
+end
+
+-- ========================================================================
+-- 🖥️ MODERN SLEEK KEYBINDS HUD (NEVERLOSE / ARGON HVH STYLE)
+-- ========================================================================
+local function formatKeycapText(keyCode)
+    if not keyCode or keyCode == Enum.KeyCode.Unknown then
+        return "[ NONE ]"
+    end
+    local name = formatKeyName(keyCode)
+    if not name or name == "" or name == "None" then
+        return "[ NONE ]"
+    end
+    return "[ " .. name:upper() .. " ]"
+end
+
+-- Outer Floating Container (Holds drop shadow backdrop + main card in lockstep)
+local keybindsFrame = Instance.new("Frame")
+keybindsFrame.Name = "KeybindsContainer"
+keybindsFrame.Position = UDim2.fromOffset(20, 115)
+keybindsFrame.Size = UDim2.fromOffset(270, 400)
+keybindsFrame.BackgroundTransparency = 1
+keybindsFrame.BorderSizePixel = 0
+keybindsFrame.Parent = hudGui
+
+-- Soft Outer Drop Shadow Backing
+local kbShadow = Instance.new("Frame")
+kbShadow.Name = "ShadowBacking"
+kbShadow.Position = UDim2.fromOffset(-7, -7)
+kbShadow.Size = UDim2.new(1, 14, 1, 14)
+kbShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+kbShadow.BackgroundTransparency = 0.65
+kbShadow.BorderSizePixel = 0
+kbShadow.ZIndex = 1
+kbShadow.Parent = keybindsFrame
+
+local kbShadowCorner = Instance.new("UICorner")
+kbShadowCorner.CornerRadius = UDim.new(0, 16)
+kbShadowCorner.Parent = kbShadow
+
+-- Deep Onyx Glassmorphic Main Card
+local kbCard = Instance.new("Frame")
+kbCard.Name = "KeybindsCard"
+kbCard.Size = UDim2.fromScale(1, 1)
+kbCard.BackgroundColor3 = Color3.fromRGB(13, 13, 18)
+kbCard.BackgroundTransparency = 0.04
+kbCard.BorderSizePixel = 0
+kbCard.ClipsDescendants = true
+kbCard.ZIndex = 2
+kbCard.Parent = keybindsFrame
+
+local kbCorner = Instance.new("UICorner")
+kbCorner.CornerRadius = UDim.new(0, 12)
+kbCorner.Parent = kbCard
+
+local kbStroke = Instance.new("UIStroke")
+kbStroke.Color = Color3.fromRGB(36, 35, 48)
+kbStroke.Thickness = 1.2
+kbStroke.Parent = kbCard
+
+-- Sleek 38px Header Bar
+local headerBar = Instance.new("Frame")
+headerBar.Name = "HeaderBar"
+headerBar.Size = UDim2.new(1, 0, 0, 38)
+headerBar.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+headerBar.BorderSizePixel = 0
+headerBar.ZIndex = 3
+headerBar.Parent = kbCard
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 12)
+headerCorner.Parent = headerBar
+
+local headerHairline = Instance.new("Frame")
+headerHairline.Name = "Hairline"
+headerHairline.Size = UDim2.new(1, 0, 0, 1)
+headerHairline.Position = UDim2.new(0, 0, 1, -1)
+headerHairline.BackgroundColor3 = Color3.fromRGB(28, 27, 38)
+headerHairline.BorderSizePixel = 0
+headerHairline.ZIndex = 4
+headerHairline.Parent = headerBar
+
+-- Illuminated Header Icon Pill
+local headerIconPill = Instance.new("Frame")
+headerIconPill.Name = "IconPill"
+headerIconPill.Size = UDim2.fromOffset(22, 22)
+headerIconPill.Position = UDim2.fromOffset(10, 8)
+headerIconPill.BackgroundColor3 = Color3.fromRGB(30, 26, 50)
+headerIconPill.BorderSizePixel = 0
+headerIconPill.ZIndex = 5
+headerIconPill.Parent = headerBar
+
+local hipCorner = Instance.new("UICorner")
+hipCorner.CornerRadius = UDim.new(0, 6)
+hipCorner.Parent = headerIconPill
+
+local hipStroke = Instance.new("UIStroke")
+hipStroke.Color = Color3.fromRGB(115, 90, 235)
+hipStroke.Thickness = 1
+hipStroke.Parent = headerIconPill
+
+local headerIconTxt = Instance.new("TextLabel")
+headerIconTxt.Size = UDim2.fromScale(1, 1)
+headerIconTxt.BackgroundTransparency = 1
+headerIconTxt.Font = Enum.Font.GothamBold
+headerIconTxt.TextSize = 12
+headerIconTxt.TextColor3 = Color3.fromRGB(180, 160, 255)
+headerIconTxt.Text = "⚡"
+headerIconTxt.ZIndex = 6
+headerIconTxt.Parent = headerIconPill
+
+-- Title Label
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Name = "Title"
+headerTitle.Size = UDim2.fromOffset(80, 38)
+headerTitle.Position = UDim2.fromOffset(38, 0)
+headerTitle.BackgroundTransparency = 1
+headerTitle.Font = Enum.Font.GothamBold
+headerTitle.TextSize = 12
+headerTitle.TextColor3 = Color3.fromRGB(240, 240, 252)
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.Text = "KEYBINDS"
+headerTitle.ZIndex = 5
+headerTitle.Parent = headerBar
+
+-- Dynamic Active Module Counter Badge
+local activeBadge = Instance.new("Frame")
+activeBadge.Name = "ActiveBadge"
+activeBadge.Size = UDim2.fromOffset(54, 20)
+activeBadge.Position = UDim2.fromOffset(120, 9)
+activeBadge.BackgroundColor3 = Color3.fromRGB(22, 21, 30)
+activeBadge.BorderSizePixel = 0
+activeBadge.ZIndex = 5
+activeBadge.Parent = headerBar
+
+local badgeCorner = Instance.new("UICorner")
+badgeCorner.CornerRadius = UDim.new(1, 0)
+badgeCorner.Parent = activeBadge
+
+local badgeStroke = Instance.new("UIStroke")
+badgeStroke.Color = Color3.fromRGB(38, 36, 50)
+badgeStroke.Thickness = 1
+badgeStroke.Parent = activeBadge
+
+local activeBadgeTxt = Instance.new("TextLabel")
+activeBadgeTxt.Size = UDim2.fromScale(1, 1)
+activeBadgeTxt.BackgroundTransparency = 1
+activeBadgeTxt.Font = Enum.Font.GothamBold
+activeBadgeTxt.TextSize = 10
+activeBadgeTxt.TextColor3 = Color3.fromRGB(135, 132, 155)
+activeBadgeTxt.Text = "0 ON"
+activeBadgeTxt.ZIndex = 6
+activeBadgeTxt.Parent = activeBadge
+
+-- Minimize Button (— / +)
+local minBtn = Instance.new("TextButton")
+minBtn.Name = "MinimizeBtn"
+minBtn.Size = UDim2.fromOffset(22, 22)
+minBtn.Position = UDim2.new(1, -30, 0, 8)
+minBtn.BackgroundColor3 = Color3.fromRGB(24, 23, 33)
+minBtn.BorderSizePixel = 0
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 13
+minBtn.TextColor3 = Color3.fromRGB(200, 196, 220)
+minBtn.Text = "—"
+minBtn.ZIndex = 5
+minBtn.Parent = headerBar
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minBtn
+
+local minStroke = Instance.new("UIStroke")
+minStroke.Color = Color3.fromRGB(40, 38, 56)
+minStroke.Thickness = 1
+minStroke.Parent = minBtn
+
+minBtn.MouseEnter:Connect(function()
+    TweenService:Create(minBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = Color3.fromRGB(36, 34, 48)
+    }):Play()
+    TweenService:Create(minStroke, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Color = Color3.fromRGB(60, 56, 80)
+    }):Play()
+end)
+minBtn.MouseLeave:Connect(function()
+    TweenService:Create(minBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = Color3.fromRGB(24, 23, 33)
+    }):Play()
+    TweenService:Create(minStroke, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Color = Color3.fromRGB(40, 38, 56)
+    }):Play()
+end)
+
+-- Scrolling Rows Container
+local rowsHolder = Instance.new("ScrollingFrame")
+rowsHolder.Name = "RowsHolder"
+rowsHolder.Position = UDim2.fromOffset(8, 44)
+rowsHolder.Size = UDim2.new(1, -16, 1, -50)
+rowsHolder.BackgroundTransparency = 1
+rowsHolder.BorderSizePixel = 0
+rowsHolder.ScrollBarThickness = 2
+rowsHolder.ScrollBarImageColor3 = Color3.fromRGB(115, 90, 235)
+rowsHolder.CanvasSize = UDim2.new(0, 0, 0, 0)
+rowsHolder.AutomaticCanvasSize = Enum.AutomaticSize.Y
+rowsHolder.ZIndex = 4
+rowsHolder.Parent = kbCard
+
+local rowsLayout = Instance.new("UIListLayout")
+rowsLayout.FillDirection = Enum.FillDirection.Vertical
+rowsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+rowsLayout.Padding = UDim.new(0, 4)
+rowsLayout.Parent = rowsHolder
+
+-- Make Keybinds HUD Draggable
+do
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local activeInput = nil
+
+    trackConn(headerBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = keybindsFrame.Position
+            activeInput = input
+        end
+    end))
+
+    trackConn(UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input == activeInput or input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            keybindsFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end))
+
+    trackConn(UserInputService.InputEnded:Connect(function(input)
+        if input == activeInput or input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            activeInput = nil
+        end
+    end))
+end
+
+-- Module Registry for Keybinds + HUD + Maclib Toggles
+local MODULES = {}
+local MODULE_ORDER = {}
+local activeRebindModule = nil
+
+local function updateActiveBadge()
+    local count = 0
+    for _, mod in ipairs(MODULE_ORDER) do
+        if CFG[mod.cfgKey] == true then
+            count = count + 1
+        end
+    end
+    task.spawn(function()
+        pcall(function()
+            if count > 0 then
+                activeBadgeTxt.Text = count .. " ON"
+                activeBadgeTxt.TextColor3 = Color3.fromRGB(52, 211, 153)
+                badgeStroke.Color = Color3.fromRGB(34, 197, 94)
+                activeBadge.BackgroundColor3 = Color3.fromRGB(20, 36, 28)
+            else
+                activeBadgeTxt.Text = "0 ON"
+                activeBadgeTxt.TextColor3 = Color3.fromRGB(135, 132, 155)
+                badgeStroke.Color = Color3.fromRGB(38, 36, 50)
+                activeBadge.BackgroundColor3 = Color3.fromRGB(22, 21, 30)
+            end
+        end)
+    end)
+end
+
+local function updateHudHeight(collapsed)
+    if collapsed then
+        TweenService:Create(keybindsFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(270, 38)
+        }):Play()
+    else
+        local totalRows = #MODULE_ORDER + 1 -- +1 for Show/hide menu row
+        local targetH = math.clamp(48 + totalRows * 34, 180, 480)
+        TweenService:Create(keybindsFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(270, targetH)
+        }):Play()
+    end
+end
+
+local isHudCollapsed = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+minBtn.Text = isHudCollapsed and "+" or "—"
+updateHudHeight(isHudCollapsed)
+
+minBtn.MouseButton1Click:Connect(function()
+    isHudCollapsed = not isHudCollapsed
+    minBtn.Text = isHudCollapsed and "+" or "—"
+    updateHudHeight(isHudCollapsed)
+end)
+
+-- Create top row: Show / hide menu
+local menuKeyPillBtn = nil
+local menuKeyBtnStroke = nil
+do
+    local row = Instance.new("Frame")
+    row.Name = "Row_MenuToggle"
+    row.LayoutOrder = 0
+    row.Size = UDim2.new(1, 0, 0, 30)
+    row.BackgroundColor3 = Color3.fromRGB(18, 17, 24)
+    row.BorderSizePixel = 0
+    row.ZIndex = 5
+    row.Parent = rowsHolder
+
+    local rc = Instance.new("UICorner")
+    rc.CornerRadius = UDim.new(0, 7)
+    rc.Parent = row
+
+    local rowStroke = Instance.new("UIStroke")
+    rowStroke.Color = Color3.fromRGB(28, 27, 38)
+    rowStroke.Thickness = 1
+    rowStroke.Parent = row
+
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.fromOffset(72, 22)
+    keyBtn.Position = UDim2.fromOffset(4, 4)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+    keyBtn.BorderSizePixel = 0
+    keyBtn.Font = Enum.Font.GothamBold
+    keyBtn.TextSize = 10
+    keyBtn.TextColor3 = Color3.fromRGB(200, 196, 225)
+    keyBtn.Text = formatKeycapText(CFG.menuKeybind)
+    keyBtn.ZIndex = 6
+    keyBtn.Parent = row
+    menuKeyPillBtn = keyBtn
+
+    local kc = Instance.new("UICorner")
+    kc.CornerRadius = UDim.new(0, 5)
+    kc.Parent = keyBtn
+
+    menuKeyBtnStroke = Instance.new("UIStroke")
+    menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+    menuKeyBtnStroke.Thickness = 1
+    menuKeyBtnStroke.Parent = keyBtn
+
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(1, -145, 1, 0)
+    nameLbl.Position = UDim2.fromOffset(82, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Font = Enum.Font.GothamMedium
+    nameLbl.TextSize = 11.5
+    nameLbl.TextColor3 = Color3.fromRGB(220, 218, 235)
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.Text = "MidHub Menu UI"
+    nameLbl.ZIndex = 6
+    nameLbl.Parent = row
+
+    local menuBadge = Instance.new("Frame")
+    menuBadge.AnchorPoint = Vector2.new(1, 0.5)
+    menuBadge.Position = UDim2.new(1, -8, 0.5, 0)
+    menuBadge.Size = UDim2.fromOffset(48, 18)
+    menuBadge.BackgroundColor3 = Color3.fromRGB(26, 24, 36)
+    menuBadge.BorderSizePixel = 0
+    menuBadge.ZIndex = 6
+    menuBadge.Parent = row
+
+    local mbc = Instance.new("UICorner")
+    mbc.CornerRadius = UDim.new(1, 0)
+    mbc.Parent = menuBadge
+
+    local mbStroke = Instance.new("UIStroke")
+    mbStroke.Color = Color3.fromRGB(44, 42, 60)
+    mbStroke.Thickness = 1
+    mbStroke.Parent = menuBadge
+
+    local menuBadgeTxt = Instance.new("TextLabel")
+    menuBadgeTxt.Size = UDim2.fromScale(1, 1)
+    menuBadgeTxt.BackgroundTransparency = 1
+    menuBadgeTxt.Font = Enum.Font.GothamBold
+    menuBadgeTxt.TextSize = 9
+    menuBadgeTxt.TextColor3 = Color3.fromRGB(150, 146, 175)
+    menuBadgeTxt.Text = "MENU"
+    menuBadgeTxt.ZIndex = 7
+    menuBadgeTxt.Parent = menuBadge
+
+    local function toggleMenuUI()
+        if Window and Window.SetState and Window.GetState then
+            pcall(function() Window:SetState(not Window:GetState()) end)
+        end
+    end
+
+    menuBadge.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            toggleMenuUI()
+        end
+    end)
+
+    row.MouseEnter:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(23, 22, 31)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(38, 36, 52)
+        }):Play()
+    end)
+    row.MouseLeave:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(18, 17, 24)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(28, 27, 38)
+        }):Play()
+    end)
+
+    keyBtn.MouseEnter:Connect(function()
+        if activeRebindModule ~= "__MENU__" then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(34, 32, 48)
+            }):Play()
+        end
+    end)
+    keyBtn.MouseLeave:Connect(function()
+        if activeRebindModule ~= "__MENU__" then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+            }):Play()
+        end
+    end)
+
+    keyBtn.MouseButton1Click:Connect(function()
+        if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+            toggleMenuUI()
+            return
+        end
+        activeRebindModule = "__MENU__"
+        keyBtn.Text = "[ ... ]"
+        keyBtn.BackgroundColor3 = Color3.fromRGB(115, 90, 235)
+        menuKeyBtnStroke.Color = Color3.fromRGB(168, 85, 247)
+    end)
+end
+
+-- Register a bindable module with modern row tile, keycap pill, and animated capsule switch
+local function registerBindableModule(id, displayName, cfgKey, defaultKeyCode, onChangeCallback)
+    local mod = {
+        id = id,
+        name = displayName,
+        cfgKey = cfgKey,
+        key = defaultKeyCode,
+        onChange = onChangeCallback,
+        macToggle = nil,
+        keyBtn = nil,
+        keyBtnStroke = nil,
+        nameLbl = nil,
+        switchBtn = nil,
+        switchStroke = nil,
+        thumbCircle = nil,
+    }
+    MODULES[id] = mod
+    table.insert(MODULE_ORDER, mod)
+
+    local row = Instance.new("Frame")
+    row.Name = "Row_" .. id
+    row.LayoutOrder = #MODULE_ORDER
+    row.Size = UDim2.new(1, 0, 0, 30)
+    row.BackgroundColor3 = Color3.fromRGB(18, 17, 24)
+    row.BorderSizePixel = 0
+    row.ZIndex = 5
+    row.Parent = rowsHolder
+
+    local rc = Instance.new("UICorner")
+    rc.CornerRadius = UDim.new(0, 7)
+    rc.Parent = row
+
+    local rowStroke = Instance.new("UIStroke")
+    rowStroke.Color = Color3.fromRGB(28, 27, 38)
+    rowStroke.Thickness = 1
+    rowStroke.Parent = row
+
+    -- Mechanical Keycap Pill
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.fromOffset(72, 22)
+    keyBtn.Position = UDim2.fromOffset(4, 4)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+    keyBtn.BorderSizePixel = 0
+    keyBtn.Font = Enum.Font.GothamBold
+    keyBtn.TextSize = 10
+    keyBtn.TextColor3 = Color3.fromRGB(200, 196, 225)
+    keyBtn.Text = formatKeycapText(defaultKeyCode)
+    keyBtn.ZIndex = 6
+    keyBtn.Parent = row
+    mod.keyBtn = keyBtn
+
+    local kc = Instance.new("UICorner")
+    kc.CornerRadius = UDim.new(0, 5)
+    kc.Parent = keyBtn
+
+    local keyStroke = Instance.new("UIStroke")
+    keyStroke.Color = Color3.fromRGB(44, 42, 60)
+    keyStroke.Thickness = 1
+    keyStroke.Parent = keyBtn
+    mod.keyBtnStroke = keyStroke
+
+    -- Module Title Label
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(1, -128, 1, 0)
+    nameLbl.Position = UDim2.fromOffset(82, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Font = Enum.Font.GothamMedium
+    nameLbl.TextSize = 12
+    nameLbl.TextColor3 = Color3.fromRGB(185, 182, 202)
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLbl.Text = displayName
+    nameLbl.ZIndex = 6
+    nameLbl.Parent = row
+    mod.nameLbl = nameLbl
+
+    -- Modern Capsule Toggle Switch
+    local switchBtn = Instance.new("TextButton")
+    switchBtn.Name = "SwitchBtn"
+    switchBtn.AnchorPoint = Vector2.new(1, 0.5)
+    switchBtn.Position = UDim2.new(1, -8, 0.5, 0)
+    switchBtn.Size = UDim2.fromOffset(36, 18)
+    switchBtn.BackgroundColor3 = Color3.fromRGB(28, 27, 38)
+    switchBtn.BorderSizePixel = 0
+    switchBtn.AutoButtonColor = false
+    switchBtn.Text = ""
+    switchBtn.ZIndex = 6
+    switchBtn.Parent = row
+    mod.switchBtn = switchBtn
+
+    local swCorner = Instance.new("UICorner")
+    swCorner.CornerRadius = UDim.new(1, 0)
+    swCorner.Parent = switchBtn
+
+    local swStroke = Instance.new("UIStroke")
+    swStroke.Color = Color3.fromRGB(44, 42, 60)
+    swStroke.Thickness = 1
+    swStroke.Parent = switchBtn
+    mod.switchStroke = swStroke
+
+    local thumb = Instance.new("Frame")
+    thumb.Name = "Thumb"
+    thumb.Size = UDim2.fromOffset(12, 12)
+    thumb.Position = UDim2.fromOffset(3, 3)
+    thumb.BackgroundColor3 = Color3.fromRGB(120, 116, 140)
+    thumb.BorderSizePixel = 0
+    thumb.ZIndex = 7
+    thumb.Parent = switchBtn
+    mod.thumbCircle = thumb
+
+    local thCorner = Instance.new("UICorner")
+    thCorner.CornerRadius = UDim.new(1, 0)
+    thCorner.Parent = thumb
+
+    -- Tile hover effect
+    row.MouseEnter:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(23, 22, 31)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(38, 36, 52)
+        }):Play()
+    end)
+    row.MouseLeave:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Color3.fromRGB(18, 17, 24)
+        }):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Color = Color3.fromRGB(28, 27, 38)
+        }):Play()
+    end)
+
+    keyBtn.MouseEnter:Connect(function()
+        if activeRebindModule ~= mod then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(34, 32, 48)
+            }):Play()
+        end
+    end)
+    keyBtn.MouseLeave:Connect(function()
+        if activeRebindModule ~= mod then
+            TweenService:Create(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+            }):Play()
+        end
+    end)
+
+    function mod:RefreshHudVisuals()
+        local isOn = CFG[self.cfgKey] == true
+        task.spawn(function()
+            pcall(function()
+                if self.keyBtn and self.keyBtn.Parent then
+                    self.keyBtn.Text = formatKeycapText(self.key)
+                    self.keyBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                    if self.keyBtnStroke then
+                        self.keyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                    end
+                end
+                if self.nameLbl and self.nameLbl.Parent then
+                    self.nameLbl.TextColor3 = isOn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(185, 182, 202)
+                end
+                if self.switchBtn and self.switchBtn.Parent then
+                    local targetBg = isOn and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(28, 27, 38)
+                    local targetStroke = isOn and Color3.fromRGB(74, 222, 128) or Color3.fromRGB(44, 42, 60)
+                    local targetThumbPos = isOn and UDim2.fromOffset(21, 3) or UDim2.fromOffset(3, 3)
+                    local targetThumbColor = isOn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(120, 116, 140)
+
+                    TweenService:Create(self.switchBtn, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        BackgroundColor3 = targetBg
+                    }):Play()
+                    if self.switchStroke then
+                        TweenService:Create(self.switchStroke, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                            Color = targetStroke
+                        }):Play()
+                    end
+                    if self.thumbCircle then
+                        TweenService:Create(self.thumbCircle, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                            Position = targetThumbPos,
+                            BackgroundColor3 = targetThumbColor
+                        }):Play()
+                    end
+                end
+            end)
+        end)
+        updateActiveBadge()
+    end
+
+    local suppressReentrant = false
+    function mod:SetState(newState, silentNotif)
+        if suppressReentrant then return end
+        local boolState = newState == true
+        if CFG[self.cfgKey] == boolState then
+            self:RefreshHudVisuals()
+            return
+        end
+        suppressReentrant = true
+        CFG[self.cfgKey] = boolState
+        if self.onChange then
+            pcall(self.onChange, boolState)
+        end
+        if self.macToggle and self.macToggle.UpdateState then
+            pcall(function() self.macToggle:UpdateState(boolState) end)
+        end
+        self:RefreshHudVisuals()
+        if not silentNotif then
+            showToggleNotification(self.name, boolState, self.key)
+        end
+        suppressReentrant = false
+    end
+
+    keyBtn.MouseButton1Click:Connect(function()
+        if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+            -- On touch devices without keyboard, tapping the pill toggles the module directly
+            mod:SetState(not CFG[mod.cfgKey], false)
+            return
+        end
+        activeRebindModule = mod
+        keyBtn.Text = "[ ... ]"
+        keyBtn.BackgroundColor3 = Color3.fromRGB(115, 90, 235)
+        keyStroke.Color = Color3.fromRGB(168, 85, 247)
+    end)
+
+    switchBtn.MouseButton1Click:Connect(function()
+        mod:SetState(not CFG[mod.cfgKey], false)
+    end)
+
+    mod:RefreshHudVisuals()
+    return mod
+end
+
+-- Register all main HvH modules into the Keybinds HUD (Unbound / "None" by default; click any key pill on HUD to bind)
+local MODS = {}
+MODS.KillAura     = registerBindableModule("KillAura",     "Kill Aura",        "killAura",        Enum.KeyCode.Unknown, function(v)
+    if not v then
+        targetHighlight.Enabled = false
+        targetHighlight.Adornee = nil
+    end
+end)
+MODS.Backtrack    = registerBindableModule("Backtrack",    "Backtrack",        "backtrackEnabled", Enum.KeyCode.Unknown, function(v)
+    if not v then
+        cleanupBacktrackGhost()
+    end
+end)
+MODS.Backtrap     = registerBindableModule("Backtrap",     "Backtrap KB",      "backtrapEnabled",  Enum.KeyCode.Unknown, nil)
+MODS.Criticals    = registerBindableModule("Criticals",    "Critical Hits",    "criticalsEnabled", Enum.KeyCode.Unknown, nil)
+MODS.Spinbot      = registerBindableModule("Spinbot",      "Spinbot / Yaw",    "yawEnabled",      Enum.KeyCode.Unknown, nil)
+MODS.FakeLag      = registerBindableModule("FakeLag",      "Fake Lag",         "fakeLagEnabled",  Enum.KeyCode.Unknown, function(v)
+    if not v then
+        cleanupFakeLagGhost()
+        local c = getChar()
+        local root = getRoot(c)
+        if root then
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+        end
+    end
+end)
+MODS.TargetStrafe = registerBindableModule("TargetStrafe", "Target Strafe",    "targetStrafe",    Enum.KeyCode.Unknown, nil)
+MODS.AutoTrap     = registerBindableModule("AutoTrap",     "Auto Trap Enemy",  "autoTrap",        Enum.KeyCode.Unknown, nil)
+MODS.Scaffold     = registerBindableModule("Scaffold",     "Scaffold Bridge",  "scaffoldEnabled", Enum.KeyCode.Unknown, nil)
+MODS.AntiTrap     = registerBindableModule("AntiTrap",     "Anti-Trap Mine",   "autoBreakTrap",   Enum.KeyCode.Unknown, nil)
+MODS.Velocity     = registerBindableModule("Velocity",     "0% Velocity KB",   "antiKnockback",   Enum.KeyCode.Unknown, nil)
+MODS.Speed        = registerBindableModule("Speed",        "Speed / Strafe",   "speedEnabled",    Enum.KeyCode.Unknown, nil)
+MODS.Bhop         = registerBindableModule("Bhop",         "Auto Bhop",        "bhopEnabled",     Enum.KeyCode.Unknown, nil)
+MODS.NoJumpDelay  = registerBindableModule("NoJumpDelay",  "No Jump Delay",    "noJumpDelay",     Enum.KeyCode.Unknown, nil)
+MODS.Fly          = registerBindableModule("Fly",          "3D Flight",        "flyEnabled",      Enum.KeyCode.Unknown, nil)
+MODS.AutoGapple   = registerBindableModule("AutoGapple",   "Auto Gapple",      "autoGapple",      Enum.KeyCode.Unknown, nil)
+MODS.BowAim       = registerBindableModule("BowAim",       "Silent Bow Aim",   "bowAimbot",       Enum.KeyCode.Unknown, nil)
+MODS.ThirdPerson  = registerBindableModule("ThirdPerson",  "3rd Person HvH",   "thirdPersonHvH",  Enum.KeyCode.Unknown, setThirdPersonView)
+MODS.ESP          = registerBindableModule("ESP",          "Player ESP",       "espEnabled",      Enum.KeyCode.Unknown, nil)
+MODS.AntiLava     = registerBindableModule("AntiLava",     "Anti Lava",        "antiLava",        Enum.KeyCode.Unknown, function(v)
+    updateAntiLavaState()
+end)
+MODS.AntiVoid     = registerBindableModule("AntiVoid",     "Anti Void",        "antiVoid",        Enum.KeyCode.Unknown, nil)
+
+updateHudHeight(isHudCollapsed)
+
+-- Global InputListener for Keybinds & On-HUD Rebinding
+trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() then return end
+
+    -- Handle active rebind mode when user clicked a Key Pill on the HUD
+    if activeRebindModule then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            local kc = input.KeyCode
+            if kc == Enum.KeyCode.Escape or kc == Enum.KeyCode.Backspace then
+                -- Unbind on Escape/Backspace
+                if activeRebindModule ~= "__MENU__" then
+                    activeRebindModule.key = Enum.KeyCode.Unknown
+                    activeRebindModule:RefreshHudVisuals()
+                else
+                    menuKeyPillBtn.Text = formatKeycapText(CFG.menuKeybind)
+                    menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                    if menuKeyBtnStroke then
+                        menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                    end
+                end
+            else
+                if activeRebindModule == "__MENU__" then
+                    CFG.menuKeybind = kc
+                    menuKeyPillBtn.Text = formatKeycapText(kc)
+                    menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                    if menuKeyBtnStroke then
+                        menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                    end
+                    if Window and Window.SetKeybind then
+                        pcall(function() Window:SetKeybind(kc) end)
+                    end
+                else
+                    activeRebindModule.key = kc
+                    activeRebindModule:RefreshHudVisuals()
+                end
+            end
+            activeRebindModule = nil
+            return
+        elseif input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            -- Tapping outside or on screen cancels rebind mode cleanly
+            if activeRebindModule ~= "__MENU__" then
+                activeRebindModule:RefreshHudVisuals()
+            else
+                menuKeyPillBtn.Text = formatKeycapText(CFG.menuKeybind)
+                menuKeyPillBtn.BackgroundColor3 = Color3.fromRGB(26, 25, 36)
+                if menuKeyBtnStroke then
+                    menuKeyBtnStroke.Color = Color3.fromRGB(44, 42, 60)
+                end
+            end
+            activeRebindModule = nil
+            return
+        end
+    end
+
+    if gameProcessed then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+    local pressedKey = input.KeyCode
+    if pressedKey == Enum.KeyCode.Unknown then return end
+
+    if pressedKey == Enum.KeyCode.A then
+        CFG.strafeDirection = -1
+    elseif pressedKey == Enum.KeyCode.D then
+        CFG.strafeDirection = 1
+    end
+
+    for _, mod in ipairs(MODULE_ORDER) do
+        if mod.key ~= Enum.KeyCode.Unknown and mod.key == pressedKey then
+            mod:SetState(not CFG[mod.cfgKey], false)
+        end
+    end
+end))
+
+-- ========================================================================
+-- 🎨 MACLIB UI CONSTRUCTION
+-- ========================================================================
+
+-- ========================================================================
+-- 🌌 AMBIENCE, CUSTOM SKIES & WEATHER SYSTEM
+-- ========================================================================
+local Lighting = game:GetService("Lighting")
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local originalSkyProps = nil
+if originalSky then
+    originalSkyProps = {
+        SkyboxBk = originalSky.SkyboxBk,
+        SkyboxDn = originalSky.SkyboxDn,
+        SkyboxFt = originalSky.SkyboxFt,
+        SkyboxLf = originalSky.SkyboxLf,
+        SkyboxRt = originalSky.SkyboxRt,
+        SkyboxUp = originalSky.SkyboxUp,
+        SunTextureId = originalSky.SunTextureId,
+        MoonTextureId = originalSky.MoonTextureId,
+    }
+end
+
+local SKY_PRESETS = {
+    ["Purple Nebula"] = {
+        SkyboxBk = "rbxassetid://159454299",
+        SkyboxDn = "rbxassetid://159454296",
+        SkyboxFt = "rbxassetid://159454293",
+        SkyboxLf = "rbxassetid://159454286",
+        SkyboxRt = "rbxassetid://159454300",
+        SkyboxUp = "rbxassetid://159454288",
+    },
+    ["Blood Moon"] = {
+        SkyboxBk = "rbxassetid://8038382",
+        SkyboxDn = "rbxassetid://8038382",
+        SkyboxFt = "rbxassetid://8038382",
+        SkyboxLf = "rbxassetid://8038382",
+        SkyboxRt = "rbxassetid://8038382",
+        SkyboxUp = "rbxassetid://8038382",
+    },
+    ["Vaporwave Sunset"] = {
+        SkyboxBk = "rbxassetid://600830446",
+        SkyboxDn = "rbxassetid://600831635",
+        SkyboxFt = "rbxassetid://600832720",
+        SkyboxLf = "rbxassetid://600834177",
+        SkyboxRt = "rbxassetid://600835641",
+        SkyboxUp = "rbxassetid://600836886",
+    },
+    ["Cyberpunk Stars"] = {
+        SkyboxBk = "rbxassetid://64448843",
+        SkyboxDn = "rbxassetid://64448847",
+        SkyboxFt = "rbxassetid://64448849",
+        SkyboxLf = "rbxassetid://64448852",
+        SkyboxRt = "rbxassetid://64448856",
+        SkyboxUp = "rbxassetid://64448860",
+    }
+}
+
+local function applySkyPreset(name)
+    local curSky = Lighting:FindFirstChildOfClass("Sky")
+    if name == "Default (Minecraft)" or name == "Default" or not CFG.customSkyEnabled then
+        if curSky and originalSkyProps then
+            for prop, val in pairs(originalSkyProps) do
+                pcall(function() curSky[prop] = val end)
+            end
+        end
+        return
+    end
+
+    if not curSky then
+        curSky = Instance.new("Sky")
+        curSky.Name = "MidHub_CustomSky"
+        curSky.Parent = Lighting
+    end
+
+    local skyData = SKY_PRESETS[name]
+    if skyData then
+        for prop, val in pairs(skyData) do
+            pcall(function() curSky[prop] = val end)
+        end
+    end
+end
+
+-- Ambient Rain Particles & Audio
+local rainAttachment = nil
+local rainEmitter = nil
+local rainSound = nil
+
+local function updateRainState()
+    if CFG.rainEnabled then
+        if not rainAttachment then
+            rainAttachment = Instance.new("Attachment")
+            rainAttachment.Name = "MidHub_RainAttachment"
+            rainAttachment.Position = Vector3.new(0, 18, 0)
+            rainAttachment.Parent = workspace.Terrain
+        end
+        if not rainEmitter then
+            rainEmitter = Instance.new("ParticleEmitter")
+            rainEmitter.Name = "MidHub_RainParticles"
+            rainEmitter.Rate = CFG.rainDensity or 160
+            rainEmitter.Lifetime = NumberRange.new(0.65, 0.95)
+            rainEmitter.Speed = NumberRange.new(55, 75)
+            rainEmitter.SpreadAngle = Vector2.new(6, 6)
+            rainEmitter.Size = NumberSequence.new(0.12, 0.08)
+            rainEmitter.Color = ColorSequence.new(Color3.fromRGB(180, 215, 255))
+            rainEmitter.Transparency = NumberSequence.new(0.3, 0.55)
+            rainEmitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+            rainEmitter.EmissionDirection = Enum.NormalId.Bottom
+            rainEmitter.Parent = rainAttachment
+        else
+            rainEmitter.Rate = CFG.rainDensity or 160
+            rainEmitter.Enabled = true
+        end
+    else
+        if rainEmitter then rainEmitter.Enabled = false end
+    end
+
+    -- Rain Sound
+    if CFG.rainSoundEnabled and CFG.rainEnabled then
+        if not rainSound then
+            rainSound = Instance.new("Sound")
+            rainSound.Name = "MidHub_RainSound"
+            rainSound.SoundId = "rbxassetid://9114223170"
+            rainSound.Looped = true
+            rainSound.Volume = math.clamp((CFG.rainSoundVolume or 25) / 100, 0, 1)
+            rainSound.Parent = workspace.CurrentCamera
+            rainSound:Play()
+        else
+            rainSound.Volume = math.clamp((CFG.rainSoundVolume or 25) / 100, 0, 1)
+            if not rainSound.IsPlaying then rainSound:Play() end
+        end
+    else
+        if rainSound and rainSound.IsPlaying then rainSound:Stop() end
+    end
+end
+
+-- World Lighting & Atmosphere Tweaks
+local colorCorrEffect = nil
+local function updateAtmosphere()
+    if CFG.colorCorrection then
+        if not colorCorrEffect then
+            colorCorrEffect = Instance.new("ColorCorrectionEffect")
+            colorCorrEffect.Name = "MidHub_ColorCorrection"
+            colorCorrEffect.Parent = Lighting
+        end
+        colorCorrEffect.Saturation = CFG.saturationBoost or 0.4
+        colorCorrEffect.Contrast = CFG.contrastBoost or 0.15
+        colorCorrEffect.Enabled = true
+    else
+        if colorCorrEffect then colorCorrEffect.Enabled = false end
+    end
+
+    if CFG.timeOfDayEnabled then
+        local hrs = math.floor(CFG.timeOfDayHour or 18)
+        local mins = math.floor(((CFG.timeOfDayHour or 18) - hrs) * 60)
+        Lighting.TimeOfDay = string.format("%02d:%02d:00", hrs, mins)
+    end
+
+    if CFG.customFogEnabled then
+        Lighting.FogEnd = CFG.fogEndDist or 280
+        Lighting.FogColor = Color3.fromRGB(15, 12, 28)
+    end
+end
+
+-- ========================================================================
+-- 💾 CONFIGURATION MANAGER (PRESETS + JSON SAVE / LOAD)
+-- ========================================================================
+local CONFIG_FILE_PREFIX = "MidHub_MCPVP_Config_"
+local LAST_CONFIG_FILE   = "MidHub_MCPVP_LastConfig.json"
+
+local function serializeConfig()
+    local data = {}
+    for k, v in pairs(CFG) do
+        if typeof(v) == "EnumItem" then
+            data[k] = { __type = "EnumItem", enum = tostring(v.EnumType), name = v.Name }
+        elseif typeof(v) == "Color3" then
+            data[k] = { __type = "Color3", r = v.R, g = v.G, b = v.B }
+        else
+            data[k] = v
+        end
+    end
+    return data
+end
+
+local function applyConfig(data)
+    if type(data) ~= "table" then return end
+    for k, v in pairs(data) do
+        if type(v) == "table" and v.__type == "EnumItem" then
+            pcall(function() CFG[k] = Enum[v.enum][v.name] end)
+        elseif type(v) == "table" and v.__type == "Color3" then
+            CFG[k] = Color3.new(v.r, v.g, v.b)
+        else
+            CFG[k] = v
+        end
+    end
+    for _, mod in pairs(MODULES) do
+        if mod.RefreshHudVisuals then mod:RefreshHudVisuals() end
+        if mod.macToggle and mod.macToggle.SetValue then
+            pcall(function() mod.macToggle:SetValue(CFG[mod.cfgKey] == true) end)
+        end
+    end
+    updateNoSlowPatches()
+    applySkyPreset(CFG.selectedSky or "Default")
+    updateRainState()
+    updateAtmosphere()
+end
+
+local function saveConfigFile(cfgName)
+    local name = tostring(cfgName or "default"):gsub("[%c%s]+", "_")
+    local filename = CONFIG_FILE_PREFIX .. name .. ".json"
+    local encoded = HttpService:JSONEncode(serializeConfig())
+    pcall(function() fWriteFile(filename, encoded) end)
+    pcall(function() fWriteFile(LAST_CONFIG_FILE, encoded) end)
+    return filename
+end
+
+local function loadConfigFile(cfgName)
+    local name = tostring(cfgName or "default"):gsub("[%c%s]+", "_")
+    local filename = CONFIG_FILE_PREFIX .. name .. ".json"
+    if not (fIsFile and fIsFile(filename)) then
+        if fIsFile and fIsFile(LAST_CONFIG_FILE) then
+            filename = LAST_CONFIG_FILE
+        else
+            return false, "Config file not found: " .. filename
+        end
+    end
+    local raw = fReadFile(filename)
+    if not raw then return false, "Could not read config file." end
+    local ok, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not (ok and type(parsed) == "table") then
+        return false, "Config file corrupted."
+    end
+    applyConfig(parsed)
+    return true, "Config loaded: " .. filename
+end
+
+local PRESETS = {
+    HvH = {
+        killAura = true, auraReach = 9.2, auraCps = 11, auraHitPart = "Switch",
+        autoBlockHit = true, autoEquipSword = true, targetStrafe = true, strafeRadius = 5.5,
+        strafeSpeed = 19.5, acSafeSpeed = true,
+        yawEnabled = true, yawMode = "Spinbot 360°", spinSpeed = 720,
+        antiKnockback = true, kbHorizontalPct = 0, kbVerticalPct = 0,
+        noSlowdown = true, speedEnabled = true, speedValue = 19.8,
+        noJumpDelay = true, bhopEnabled = true, alwaysSprint = true,
+        autoGapple = true, gappleHpThreshold = 13,
+        espEnabled = true, espBox2D = true, espHealthBar = true, espName = true, espDistance = true
+    },
+    Legit = {
+        killAura = true, auraReach = 5.4, auraCps = 9, auraHitPart = "Body",
+        autoBlockHit = false, autoEquipSword = true, targetStrafe = false,
+        yawEnabled = false,
+        antiKnockback = true, kbHorizontalPct = 65, kbVerticalPct = 70,
+        noSlowdown = true, speedEnabled = false, acSafeSpeed = true,
+        noJumpDelay = true, bhopEnabled = false, alwaysSprint = true,
+        autoGapple = true, gappleHpThreshold = 10,
+        espEnabled = true, espBox2D = true, espHealthBar = true, espName = true, espDistance = true
+    },
+    Blatant = {
+        killAura = true, auraReach = 9.5, auraCps = 13, auraHitPart = "Head",
+        autoBlockHit = true, autoEquipSword = true, targetStrafe = true, strafeRadius = 5.0,
+        strafeSpeed = 20.2, acSafeSpeed = true,
+        yawEnabled = true, yawMode = "Spinbot 360°", spinSpeed = 1400,
+        antiKnockback = true, kbHorizontalPct = 0, kbVerticalPct = 0,
+        noSlowdown = true, speedEnabled = true, speedValue = 20.2,
+        noJumpDelay = true, bhopEnabled = true, alwaysSprint = true,
+        autoTrap = true, autoGapple = true, gappleHpThreshold = 15,
+        espEnabled = true, espBox2D = true, espHealthBar = true, espName = true, espDistance = true, espWeapon = true
+    }
+}
+
+-- ========================================================================
+-- 🎯 DRAWING-BASED 2D BOX ESP SUITE
+-- ========================================================================
+local espRegistry = {} -- [Player] = { boxOutline, box, hpOutline, hpBar, nameLbl, distLbl, weaponLbl }
+
+local function createPlayerEsp(plr)
+    if espRegistry[plr] then return espRegistry[plr] end
+    if type(Drawing) ~= "table" or type(Drawing.new) ~= "function" then return nil end
+
+    local ok, res = pcall(function()
+        local boxOutline = Drawing.new("Square")
+        boxOutline.Thickness = 2.4
+        boxOutline.Color = Color3.fromRGB(0, 0, 0)
+        boxOutline.Filled = false
+        boxOutline.Visible = false
+
+        local box = Drawing.new("Square")
+        box.Thickness = 1.2
+        box.Color = Color3.fromRGB(168, 85, 247)
+        box.Filled = false
+        box.Visible = false
+
+        local hpOutline = Drawing.new("Square")
+        hpOutline.Thickness = 1
+        hpOutline.Color = Color3.fromRGB(0, 0, 0)
+        hpOutline.Filled = true
+        hpOutline.Visible = false
+
+        local hpBar = Drawing.new("Square")
+        hpBar.Thickness = 1
+        hpBar.Color = Color3.fromRGB(34, 197, 94)
+        hpBar.Filled = true
+        hpBar.Visible = false
+
+        local nameLbl = Drawing.new("Text")
+        nameLbl.Size = 13
+        nameLbl.Center = true
+        nameLbl.Outline = true
+        nameLbl.Color = Color3.fromRGB(255, 255, 255)
+        nameLbl.Visible = false
+
+        local distLbl = Drawing.new("Text")
+        distLbl.Size = 11
+        distLbl.Center = true
+        distLbl.Outline = true
+        distLbl.Color = Color3.fromRGB(215, 215, 235)
+        distLbl.Visible = false
+
+        local weaponLbl = Drawing.new("Text")
+        weaponLbl.Size = 10
+        weaponLbl.Center = true
+        weaponLbl.Outline = true
+        weaponLbl.Color = Color3.fromRGB(245, 158, 11)
+        weaponLbl.Visible = false
+
+        return {
+            boxOutline = boxOutline,
+            box = box,
+            hpOutline = hpOutline,
+            hpBar = hpBar,
+            nameLbl = nameLbl,
+            distLbl = distLbl,
+            weaponLbl = weaponLbl,
+        }
+    end)
+
+    if ok and res then
+        espRegistry[plr] = res
+        return res
+    end
+    return nil
+end
+
+local function cleanupPlayerEsp(plr)
+    local esp = espRegistry[plr]
+    if esp then
+        pcall(function()
+            if esp.boxOutline then esp.boxOutline:Remove() end
+            if esp.box then esp.box:Remove() end
+            if esp.hpOutline then esp.hpOutline:Remove() end
+            if esp.hpBar then esp.hpBar:Remove() end
+            if esp.nameLbl then esp.nameLbl:Remove() end
+            if esp.distLbl then esp.distLbl:Remove() end
+            if esp.weaponLbl then esp.weaponLbl:Remove() end
+        end)
+        espRegistry[plr] = nil
+    end
+end
+
+local function hidePlayerEsp(esp)
+    if not esp then return end
+    esp.boxOutline.Visible = false
+    esp.box.Visible = false
+    esp.hpOutline.Visible = false
+    esp.hpBar.Visible = false
+    esp.nameLbl.Visible = false
+    esp.distLbl.Visible = false
+    esp.weaponLbl.Visible = false
+end
+
+Players.PlayerRemoving:Connect(cleanupPlayerEsp)
+
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
+
+local vp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+local isTouchDevice = UserInputService.TouchEnabled
+
+local function computeOptimalScale()
+    local curVp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    local isTouch = UserInputService.TouchEnabled or not UserInputService.KeyboardEnabled
+    if isTouch or curVp.Y < 640 or curVp.X < 960 then
+        local availW = math.max(curVp.X - 36, 260)
+        local availH = math.max(curVp.Y - 28, 220)
+        local scaleW = availW / 800
+        local scaleH = availH / 500
+        local fit = math.min(scaleW, scaleH)
+        return math.clamp(fit, 0.45, 0.82)
+    end
+    return 1.0
+end
+
+local function getActiveScale()
+    if CFG.uiScale and CFG.uiScale >= 45 and CFG.uiScale <= 100 then
+        return CFG.uiScale / 100
+    end
+    return computeOptimalScale()
+end
+
+local initialScale = getActiveScale()
+
+Window = MacLib:Window({
+    Title = "MID HUB — Minecraft PvP [HvH Edition]",
+    Subtitle = "v3.3 • Kill Aura, Yaw/Spinbot, Auto Trap, Velocity & Keybinds HUD",
+    Size = UDim2.fromOffset(800, 500),
+    DragStyle = 1,
+    DisabledWindowControls = {},
+    ShowUserInfo = true,
+    Keybind = CFG.menuKeybind,
+    AcrylicBlur = not (isTouchDevice or vp.Y < 600),
+})
+
+if Window and Window.SetScale then
+    pcall(function() Window:SetScale(initialScale) end)
+end
+
+trackConn(camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    if (not CFG.uiScale or CFG.uiScale == 0) and Window and Window.SetScale then
+        local newScale = computeOptimalScale()
+        pcall(function() Window:SetScale(newScale) end)
+    end
+end))
+
+local TabGroup = Window:TabGroup()
+
+local mobileToggleGui = nil
+do
+    local mGui = Instance.new("ScreenGui")
+    mGui.Name = "MidHub_MobileToggleGui"
+    mGui.ResetOnSpawn = false
+    mGui.DisplayOrder = 999995
+    mGui.Parent = getGuiContainer()
+    mobileToggleGui = mGui
+
+    local floatBtn = Instance.new("Frame")
+    floatBtn.Name = "MobileToggleBtn"
+    floatBtn.Size = UDim2.fromOffset(48, 48)
+    floatBtn.Position = UDim2.new(0, 16, 0.52, 0)
+    floatBtn.BackgroundColor3 = Color3.fromRGB(18, 17, 26)
+    floatBtn.BackgroundTransparency = 0.12
+    floatBtn.BorderSizePixel = 0
+    floatBtn.Visible = CFG.mobileButton
+    floatBtn.Parent = mGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 14)
+    corner.Parent = floatBtn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(168, 85, 247)
+    stroke.Thickness = 1.5
+    stroke.Parent = floatBtn
+
+    local boltLbl = Instance.new("TextLabel")
+    boltLbl.Size = UDim2.new(1, 0, 0, 26)
+    boltLbl.Position = UDim2.fromOffset(0, 4)
+    boltLbl.BackgroundTransparency = 1
+    boltLbl.Font = Enum.Font.GothamBold
+    boltLbl.TextSize = 20
+    boltLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    boltLbl.Text = "⚡"
+    boltLbl.Parent = floatBtn
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, 0, 0, 14)
+    subLbl.Position = UDim2.fromOffset(0, 28)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Font = Enum.Font.GothamBold
+    subLbl.TextSize = 8.5
+    subLbl.TextColor3 = Color3.fromRGB(168, 85, 247)
+    subLbl.Text = "MID"
+    subLbl.Parent = floatBtn
+
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local activeInput = nil
+    local dragDistance = 0
+
+    floatBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = floatBtn.Position
+            activeInput = input
+            dragDistance = 0
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input == activeInput or input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            dragDistance = delta.Magnitude
+            local curVp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+            local newX = math.clamp(startPos.X.Offset + delta.X, 4, curVp.X - 54)
+            local newY = math.clamp(startPos.Y.Offset + delta.Y, 4, curVp.Y - 54)
+            floatBtn.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+        end
+    end)
+
+    local function toggleMenu()
+        if Window and Window.SetState and Window.GetState then
+            local isOpen = Window:GetState()
+            Window:SetState(not isOpen)
+            local targetStroke = (not isOpen) and Color3.fromRGB(74, 222, 128) or Color3.fromRGB(168, 85, 247)
+            TweenService:Create(stroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Color = targetStroke }):Play()
+
+            local tw1 = TweenService:Create(floatBtn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(54, 54) })
+            tw1:Play()
+            tw1.Completed:Connect(function()
+                TweenService:Create(floatBtn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Size = UDim2.fromOffset(48, 48) }):Play()
+            end)
+        end
+    end
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input == activeInput or input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                dragging = false
+                activeInput = nil
+                if dragDistance < 10 then
+                    toggleMenu()
+                end
+            end
+        end
+    end)
+end
+
+local Tabs = {
+    Rage     = TabGroup:Tab({ Name = "Kill Aura & Yaw (HvH)", Image = "rbxassetid://10734975486" }),
+    Trap     = TabGroup:Tab({ Name = "Auto Trap & Scaffold",  Image = "rbxassetid://10709769841" }),
+    Move     = TabGroup:Tab({ Name = "Velocity & Speed",      Image = "rbxassetid://10734920149" }),
+    Utility  = TabGroup:Tab({ Name = "Gapple & Bow Aim",      Image = "rbxassetid://10709782497" }),
+    Visuals  = TabGroup:Tab({ Name = "ESP, Skins & HUD",      Image = "rbxassetid://10723346959" }),
+    Ambience = TabGroup:Tab({ Name = "Ambience & Weather",     Image = "rbxassetid://10734934557" }),
+    Config   = TabGroup:Tab({ Name = "Configs & Presets",     Image = "rbxassetid://10734922324" }),
+}
+
+local function bindMacToggle(section, mod)
+    local t = section:Toggle({
+        Name = mod.name,
+        Default = CFG[mod.cfgKey],
+        Callback = function(v)
+            mod:SetState(v, false)
+        end
+    })
+    mod.macToggle = t
+    return t
+end
+
+-- ========================================================================
+-- ⚔️ TAB 1: KILL AURA & YAW / SPINBOT (HVH)
+-- ========================================================================
+do
+    local AuraSec = Tabs.Rage:Section({ Side = "Left" })
+    AuraSec:Header({ Name = "Silent Kill Aura (AC-AURA Bypass)" })
+
+    bindMacToggle(AuraSec, MODS.KillAura)
+
+AuraSec:Slider({
+    Name = "Kill Aura Reach (Studs)",
+    Default = 9.2,
+    Minimum = 4.0,
+    Maximum = 9.5,
+    DisplayMethod = "Value",
+    Precision = 1,
+    Callback = function(v)
+        CFG.auraReach = math.clamp(v, 4.0, 9.5)
+        if MinecraftMeleeGeometry and origReach then
+            MinecraftMeleeGeometry.Reach = origReach
+        end
+    end
+})
+
+AuraSec:Slider({
+    Name = "Attack Speed (CPS)",
+    Default = 11,
+    Minimum = 4,
+    Maximum = 13,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(v) CFG.auraCps = math.clamp(v, 4, 13) end
+})
+
+AuraSec:Dropdown({
+    Name = "Target Hitbox Priority",
+    Multi = false,
+    Required = true,
+    Options = { "Head", "Body", "Switch" },
+    Default = 3,
+    Callback = function(v) CFG.auraHitPart = v end
+})
+
+AuraSec:Toggle({
+    Name = "Auto BlockHit (Sword Block Reset)",
+    Default = false,
+    Callback = function(v) CFG.autoBlockHit = v end
+})
+
+AuraSec:Toggle({
+    Name = "Auto Equip Diamond Sword",
+    Default = true,
+    Callback = function(v) CFG.autoEquipSword = v end
+})
+
+AuraSec:Header({ Name = "Critical Hits (HvH Crits)" })
+bindMacToggle(AuraSec, MODS.Criticals)
+
+AuraSec:Dropdown({
+    Name = "Criticals Mode",
+    Multi = false,
+    Required = true,
+    Options = { "Smart Fall (Bhop / Jump Fall Sync)", "Mini Hop (Auto Ground Hop)", "Packet (Micro-Hop Offset)" },
+    Default = "Smart Fall (Bhop / Jump Fall Sync)",
+    Callback = function(v)
+        if v and v:find("Smart Fall") then
+            CFG.criticalsMode = "Smart Fall"
+        elseif v and v:find("Mini Hop") then
+            CFG.criticalsMode = "Mini Hop"
+        elseif v and v:find("Packet") then
+            CFG.criticalsMode = "Packet"
+        end
+    end
+})
+
+AuraSec:Toggle({
+    Name = "Visual Critical Stars (Red Hit Stars)",
+    Default = true,
+    Callback = function(v) CFG.critVisualStars = v end
+})
+
+bindMacToggle(AuraSec, MODS.TargetStrafe)
+
+AuraSec:Slider({
+    Name = "Target Strafe Radius",
+    Default = 5.5,
+    Minimum = 2.5,
+    Maximum = 10.0,
+    DisplayMethod = "Value",
+    Precision = 1,
+    Callback = function(v) CFG.strafeRadius = v end
+})
+
+AuraSec:Slider({
+    Name = "Target Strafe Speed",
+    Default = 18.0,
+    Minimum = 12.0,
+    Maximum = 30.0,
+    DisplayMethod = "Value",
+    Precision = 1,
+    Callback = function(v) CFG.strafeSpeed = v end
+})
+
+AuraSec:Header({ Name = "Backtrack (Latency Ghost Hitbox)" })
+bindMacToggle(AuraSec, MODS.Backtrack)
+
+AuraSec:Slider({
+    Name = "Backtrack Window (ms)",
+    Default = 150,
+    Minimum = 50,
+    Maximum = 300,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(v) CFG.backtrackMs = math.clamp(v, 50, 300) end
+})
+
+AuraSec:Toggle({
+    Name = "Backtrack Visual Ghost (Cyan)",
+    Default = true,
+    Callback = function(v)
+        CFG.backtrackVisuals = v
+        if not v then cleanupBacktrackGhost() end
+    end
+})
+
+AuraSec:Header({ Name = "Backtrap (Knockback Deflector)" })
+bindMacToggle(AuraSec, MODS.Backtrap)
+
+AuraSec:Slider({
+    Name = "Backtrap Distance (Studs)",
+    Default = 3.2,
+    Minimum = 1.6,
+    Maximum = 6.4,
+    DisplayMethod = "Value",
+    Precision = 1,
+    Callback = function(v) CFG.backtrapDistance = v end
+})
+
+AuraSec:Toggle({
+    Name = "Double Height Wall",
+    Default = false,
+    Callback = function(v) CFG.backtrapDoubleHeight = v end
+})
+
+    local YawSec = Tabs.Rage:Section({ Side = "Right" })
+    YawSec:Header({ Name = "Anti-Aim / Yaw & Spinbot" })
+
+    bindMacToggle(YawSec, MODS.Spinbot)
+
+    YawSec:Dropdown({
+        Name = "Yaw / Anti-Aim Mode",
+        Multi = false,
+        Required = true,
+        Options = { "Spinbot 360°", "Jitter Desync", "Backwards (180°)", "Face Target", "Static Offset" },
+        Default = 1,
+        Callback = function(v) CFG.yawMode = v end
+    })
+
+    YawSec:Slider({
+        Name = "Spinbot Speed (Deg / Sec)",
+        Default = 720,
+        Minimum = 90,
+        Maximum = 2500,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.spinSpeed = v end
+    })
+
+    YawSec:Slider({
+        Name = "Jitter / Static Yaw Angle (°)",
+        Default = 75,
+        Minimum = 15,
+        Maximum = 180,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.jitterAngle = v
+            CFG.staticYawOffset = v
+        end
+    })
+
+    YawSec:Toggle({
+        Name = "Sneak / Twerk Spam Desync",
+        Default = false,
+        Callback = function(v)
+            CFG.sneakSpam = v
+            if not v and MinecraftSneak then
+                pcall(function() MinecraftSneak:FireServer(false) end)
+            end
+        end
+    })
+
+    bindMacToggle(YawSec, MODS.ThirdPerson)
+
+    YawSec:Header({ Name = "Fake Lag & Desync (HvH)" })
+    bindMacToggle(YawSec, MODS.FakeLag)
+
+    YawSec:Dropdown({
+        Name = "Fake Lag Mode",
+        Multi = false,
+        Required = true,
+        Options = { "Jitter (Randomized Choke)", "Static (Fixed Choke)", "Adaptive (Moving Only)" },
+        Default = "Jitter (Randomized Choke)",
+        Callback = function(v)
+            if v and v:find("Static") then
+                CFG.fakeLagMode = "Static"
+            elseif v and v:find("Adaptive") then
+                CFG.fakeLagMode = "Adaptive"
+            else
+                CFG.fakeLagMode = "Jitter"
+            end
+        end
+    })
+
+    YawSec:Slider({
+        Name = "Choke Limit (Ticks)",
+        Default = 5,
+        Minimum = 2,
+        Maximum = 10,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.fakeLagChokeTicks = math.clamp(v, 2, 10) end
+    })
+
+    YawSec:Toggle({
+        Name = "Anti-Cheat Distance Guard (Max 2.8 Studs)",
+        Default = true,
+        Callback = function(v) CFG.fakeLagAcGuard = v end
+    })
+
+    YawSec:Toggle({
+        Name = "Visual Lag Ghost (Server Position)",
+        Default = true,
+        Callback = function(v)
+            CFG.fakeLagGhost = v
+            if not v then cleanupFakeLagGhost() end
+        end
+    })
+end
+
+-- ========================================================================
+-- 🧱 TAB 2: AUTO TRAP & SCAFFOLD
+-- ========================================================================
+do
+    local TrapSec = Tabs.Trap:Section({ Side = "Left" })
+    TrapSec:Header({ Name = "Auto Trap / Box Enemy (Cobblestone)" })
+
+    bindMacToggle(TrapSec, MODS.AutoTrap)
+
+    TrapSec:Dropdown({
+        Name = "Auto Trap Cage Style",
+        Multi = false,
+        Required = true,
+        Options = { "Full Cage + Roof", "4-Wall Ring", "Head Trap (Roof + Upper)", "Feet Obstruct" },
+        Default = 1,
+        Callback = function(v) CFG.trapMode = v end
+    })
+
+    TrapSec:Slider({
+        Name = "Auto Trap Range (Studs)",
+        Default = 15,
+        Minimum = 5,
+        Maximum = 20,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.trapRange = v end
+    })
+
+    TrapSec:Toggle({
+        Name = "Silent Auto-Equip Cobblestone",
+        Default = true,
+        Callback = function(v) CFG.trapSilentSwap = v end
+    })
+
+    TrapSec:Button({
+        Name = "Instant Box Nearest Enemy Now",
+        Callback = function()
+            task.spawn(function()
+                local myRoot = getRoot()
+                if myRoot and isInSpawnSafezone(myRoot.Position) then
+                    Window:Notify({ Title = "Auto Trap", Description = "Drop into the Arena first! (Spawn Safezone blocks building)", Lifetime = 3 })
+                    return
+                end
+                local enemy = getClosestEnemy(CFG.trapRange)
+                if not enemy then
+                    Window:Notify({ Title = "Auto Trap", Description = "No enemy within range in the Arena!", Lifetime = 2.5 })
+                    return
+                end
+                local eRoot = enemy:FindFirstChild("HumanoidRootPart")
+                if not eRoot then return end
+                local center = getEntityFeetGridCenter(eRoot.Position)
+                local offsets = getTrapOffsets(CFG.trapMode)
+                local placed = 0
+                for _, off in ipairs(offsets) do
+                    if placeBlockAtGridPos(center + off) then
+                        placed = placed + 1
+                        task.wait(0.115)
+                    end
+                end
+                if toolBeforeTrap then
+                    equipToolFast(toolBeforeTrap)
+                    toolBeforeTrap = nil
+                end
+                Window:Notify({
+                    Title = "Auto Trap",
+                    Description = string.format("Placed %d trap blocks around %s!", placed, enemy.Name),
+                    Lifetime = 3
+                })
+            end)
+        end
+    })
+
+    local ScafSec = Tabs.Trap:Section({ Side = "Right" })
+    ScafSec:Header({ Name = "Scaffold & Auto Unbox (Anti-Trap)" })
+
+    bindMacToggle(ScafSec, MODS.Scaffold)
+    bindMacToggle(ScafSec, MODS.AntiTrap)
+end
+
+-- ========================================================================
+-- 🚀 TAB 3: VELOCITY & MOVEMENT
+-- ========================================================================
+do
+    local VelSec = Tabs.Move:Section({ Side = "Left" })
+    VelSec:Header({ Name = "Velocity (Anti-Knockback) & NoSlow" })
+
+    bindMacToggle(VelSec, MODS.Velocity)
+
+    VelSec:Slider({
+        Name = "Horizontal Velocity (%)",
+        Default = 0,
+        Minimum = 0,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.kbHorizontalPct = v end
+    })
+
+    VelSec:Slider({
+        Name = "Vertical Velocity (%)",
+        Default = 0,
+        Minimum = 0,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.kbVerticalPct = v end
+    })
+
+    VelSec:Toggle({
+        Name = "NoSlowdown (Eat / Block / Cobweb / SoulSand)",
+        Default = true,
+        Callback = function(v)
+            CFG.noSlowdown = v
+            updateNoSlowPatches()
+        end
+    })
+
+    bindMacToggle(VelSec, MODS.AntiLava)
+    bindMacToggle(VelSec, MODS.AntiVoid)
+
+    VelSec:Dropdown({
+        Name = "Anti-Void Fall Catch Mode",
+        Multi = false,
+        Required = true,
+        Options = { "Teleport (Recall to Edge)", "Bounce (High Launch Up)" },
+        Default = "Teleport (Recall to Edge)",
+        Callback = function(v)
+            CFG.antiVoidMode = (v and v:find("Bounce")) and "Bounce" or "Teleport"
+        end
+    })
+
+    VelSec:Toggle({
+        Name = "Always Sprint",
+        Default = true,
+        Callback = function(v)
+            CFG.alwaysSprint = v
+            if SprintRemote then
+                pcall(function() SprintRemote:FireServer(v) end)
+            end
+        end
+    })
+
+    local SpeedSec = Tabs.Move:Section({ Side = "Right" })
+    SpeedSec:Header({ Name = "Speed, Bhop & Flight" })
+
+    bindMacToggle(SpeedSec, MODS.Speed)
+
+    SpeedSec:Slider({
+        Name = "Move Speed Value (Safe max: 18.5)",
+        Default = 18.2,
+        Minimum = 14.0,
+        Maximum = 35.0,
+        DisplayMethod = "Value",
+        Precision = 1,
+        Callback = function(v) CFG.speedValue = v end
+    })
+
+    SpeedSec:Toggle({
+        Name = "AC Safe Bypass Speed (Anti-Kick)",
+        Default = true,
+        Callback = function(v) CFG.acSafeSpeed = v end
+    })
+
+    bindMacToggle(SpeedSec, MODS.NoJumpDelay)
+    bindMacToggle(SpeedSec, MODS.Bhop)
+    bindMacToggle(SpeedSec, MODS.Fly)
+
+    SpeedSec:Slider({
+        Name = "Flight Speed",
+        Default = 55,
+        Minimum = 20,
+        Maximum = 150,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.flySpeed = v end
+    })
+
+    SpeedSec:Toggle({
+        Name = "Noclip",
+        Default = false,
+        Callback = function(v) CFG.noclip = v end
+    })
+end
+
+-- ========================================================================
+-- 🍎 TAB 4: AUTO GAPPLE & BOW AIMBOT
+-- ========================================================================
+do
+    local GapSec = Tabs.Utility:Section({ Side = "Left" })
+    GapSec:Header({ Name = "Auto Golden Apple" })
+
+    bindMacToggle(GapSec, MODS.AutoGapple)
+
+    GapSec:Slider({
+        Name = "Golden Apple HP Threshold (Max 20)",
+        Default = 13,
+        Minimum = 4,
+        Maximum = 19,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.gappleHpThreshold = v end
+    })
+
+    local BowSec = Tabs.Utility:Section({ Side = "Right" })
+    BowSec:Header({ Name = "Silent Bow Aimbot" })
+
+    bindMacToggle(BowSec, MODS.BowAim)
+
+    BowSec:Slider({
+        Name = "Bow Aimbot Range",
+        Default = 85,
+        Minimum = 20,
+        Maximum = 160,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v) CFG.bowRange = v end
+    })
+end
+
+-- ========================================================================
+-- ✨ TAB 5: ESP, COSMETICS & KEYBINDS HUD SETTINGS
+-- ========================================================================
+do
+    local EspSec = Tabs.Visuals:Section({ Side = "Left" })
+    EspSec:Header({ Name = "Keybinds HUD & Notifications" })
+
+    EspSec:Toggle({
+        Name = "Show On-Screen Keybinds HUD",
+        Default = true,
+        Callback = function(v)
+            CFG.showKeybindHud = v
+            keybindsFrame.Visible = v
+        end
+    })
+
+    EspSec:Toggle({
+        Name = "Show Toggle ON/OFF Notifications",
+        Default = true,
+        Callback = function(v) CFG.toggleNotifs = v end
+    })
+
+    EspSec:Toggle({
+        Name = "Play Sound On Module Toggle",
+        Default = true,
+        Callback = function(v) CFG.notifSound = v end
+    })
+
+    EspSec:Toggle({
+        Name = "Floating Mobile Menu Button (⚡)",
+        Default = CFG.mobileButton,
+        Callback = function(v)
+            CFG.mobileButton = v
+            if mobileToggleGui and mobileToggleGui:FindFirstChild("MobileToggleBtn") then
+                mobileToggleGui.MobileToggleBtn.Visible = v
+            end
+        end
+    })
+
+    EspSec:Slider({
+        Name = "Menu UI Scale (%)",
+        Default = math.floor(initialScale * 100),
+        Minimum = 45,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.uiScale = v
+            if Window and Window.SetScale then
+                pcall(function() Window:SetScale(v / 100) end)
+            end
+        end
+    })
+
+    EspSec:Button({
+        Name = "Recenter & Auto-Fit GUI (Mobile)",
+        Callback = function()
+            CFG.uiScale = 0
+            local newScale = computeOptimalScale()
+            if Window and Window.SetScale then
+                pcall(function() Window:SetScale(newScale) end)
+            end
+            pcall(function()
+                local container = getGuiContainer()
+                for _, g in ipairs(container:GetChildren()) do
+                    local b = g:FindFirstChild("Base")
+                    if b and b:IsA("Frame") then
+                        b.Position = UDim2.fromScale(0.5, 0.5)
+                    end
+                end
+            end)
+        end
+    })
+
+    EspSec:Header({ Name = "HvH 2D Box ESP" })
+    bindMacToggle(EspSec, MODS.ESP)
+
+    EspSec:Toggle({
+        Name = "2D Bounding Box",
+        Default = true,
+        Callback = function(v) CFG.espBox2D = v end
+    })
+
+    EspSec:Toggle({
+        Name = "2D Health Bar (Gradient)",
+        Default = true,
+        Callback = function(v) CFG.espHealthBar = v end
+    })
+
+    EspSec:Toggle({
+        Name = "Player Name Label",
+        Default = true,
+        Callback = function(v) CFG.espName = v end
+    })
+
+    EspSec:Toggle({
+        Name = "Distance & Hearts Tag",
+        Default = true,
+        Callback = function(v) CFG.espDistance = v end
+    })
+
+    EspSec:Toggle({
+        Name = "Weapon / Item Held Tag",
+        Default = true,
+        Callback = function(v) CFG.espWeapon = v end
+    })
+
+    local CosSec = Tabs.Visuals:Section({ Side = "Right" })
+    CosSec:Header({ Name = "Client Cosmetics Unlocker" })
+
+    local swordSkinIds = { "default" }
+    local auraIds      = { "default" }
+    local mcSkinIds    = { "default" }
+
+    if CosmeticsCatalog and CosmeticsCatalog.Items then
+        if type(CosmeticsCatalog.Items.Swords) == "table" then
+            for _, item in ipairs(CosmeticsCatalog.Items.Swords) do
+                if item.id and item.id ~= "default" then
+                    table.insert(swordSkinIds, item.id)
+                end
+            end
+        end
+        if type(CosmeticsCatalog.Items.Auras) == "table" then
+            for _, item in ipairs(CosmeticsCatalog.Items.Auras) do
+                if item.id and item.id ~= "default" then
+                    table.insert(auraIds, item.id)
+                end
+            end
+        end
+        if type(CosmeticsCatalog.Items.Skins) == "table" then
+            for _, item in ipairs(CosmeticsCatalog.Items.Skins) do
+                if item.id and item.id ~= "default" then
+                    table.insert(mcSkinIds, item.id)
+                end
+            end
+        end
+    end
+
+    local origCanEquip = CosmeticsCatalog and CosmeticsCatalog.CanEquip
+    if CosmeticsCatalog then
+        CosmeticsCatalog.CanEquip = function()
+            return true
+        end
+    end
+
+    CosSec:Dropdown({
+        Name = "Sword Skin Override",
+        Multi = false,
+        Required = true,
+        Options = swordSkinIds,
+        Default = 1,
+        Callback = function(v)
+            CFG.selectedSwordSkin = v
+            pcall(function() lp:SetAttribute("CosmeticSword", v) end)
+        end
+    })
+
+    CosSec:Dropdown({
+        Name = "Minecraft Character Skin",
+        Multi = false,
+        Required = true,
+        Options = mcSkinIds,
+        Default = 1,
+        Callback = function(v)
+            CFG.selectedMcSkin = v
+            pcall(function() lp:SetAttribute("CosmeticSkin", v) end)
+        end
+    })
+
+    CosSec:Dropdown({
+        Name = "Particle Aura Override",
+        Multi = false,
+        Required = true,
+        Options = auraIds,
+        Default = 1,
+        Callback = function(v)
+            CFG.selectedAura = v
+            pcall(function() lp:SetAttribute("CosmeticAura", v) end)
+        end
+    })
+end
+
+-- ========================================================================
+
+-- ========================================================================
+-- 🌌 TAB 6: AMBIENCE & WEATHER UI
+-- ========================================================================
+do
+    local SkySec = Tabs.Ambience:Section({ Side = "Left" })
+    SkySec:Header({ Name = "Custom Skybox & Time of Day" })
+
+    SkySec:Toggle({
+        Name = "Enable Custom Skybox",
+        Default = false,
+        Callback = function(v)
+            CFG.customSkyEnabled = v
+            applySkyPreset(v and CFG.selectedSky or "Default")
+        end
+    })
+
+    SkySec:Dropdown({
+        Name = "Skybox Theme",
+        Multi = false,
+        Required = true,
+        Options = { "Default (Minecraft)", "Purple Nebula", "Blood Moon", "Vaporwave Sunset", "Cyberpunk Stars" },
+        Default = 2,
+        Callback = function(v)
+            CFG.selectedSky = v
+            if CFG.customSkyEnabled then applySkyPreset(v) end
+        end
+    })
+
+    SkySec:Toggle({
+        Name = "Custom Time of Day",
+        Default = false,
+        Callback = function(v)
+            CFG.timeOfDayEnabled = v
+            updateAtmosphere()
+        end
+    })
+
+    SkySec:Slider({
+        Name = "Time of Day (Hours)",
+        Default = 18.5,
+        Minimum = 0,
+        Maximum = 24,
+        DisplayMethod = "Value",
+        Precision = 1,
+        Callback = function(v)
+            CFG.timeOfDayHour = v
+            if CFG.timeOfDayEnabled then updateAtmosphere() end
+        end
+    })
+
+    local WeatherSec = Tabs.Ambience:Section({ Side = "Right" })
+    WeatherSec:Header({ Name = "Rain & Atmospheric Effects" })
+
+    WeatherSec:Toggle({
+        Name = "Aesthetic Rain Effect",
+        Default = false,
+        Callback = function(v)
+            CFG.rainEnabled = v
+            updateRainState()
+        end
+    })
+
+    WeatherSec:Slider({
+        Name = "Rain Particle Density",
+        Default = 160,
+        Minimum = 50,
+        Maximum = 350,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.rainDensity = v
+            if CFG.rainEnabled then updateRainState() end
+        end
+    })
+
+    WeatherSec:Toggle({
+        Name = "Ambient Rain Audio Loop",
+        Default = false,
+        Callback = function(v)
+            CFG.rainSoundEnabled = v
+            updateRainState()
+        end
+    })
+
+    WeatherSec:Slider({
+        Name = "Rain Audio Volume (%)",
+        Default = 25,
+        Minimum = 5,
+        Maximum = 100,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(v)
+            CFG.rainSoundVolume = v
+            if CFG.rainEnabled and CFG.rainSoundEnabled then updateRainState() end
+        end
+    })
+
+    WeatherSec:Toggle({
+        Name = "ColorCorrection & Saturation Boost",
+        Default = false,
+        Callback = function(v)
+            CFG.colorCorrection = v
+            updateAtmosphere()
+        end
+    })
+
+    WeatherSec:Slider({
+        Name = "Saturation Boost",
+        Default = 0.4,
+        Minimum = 0,
+        Maximum = 1.5,
+        DisplayMethod = "Value",
+        Precision = 2,
+        Callback = function(v)
+            CFG.saturationBoost = v
+            if CFG.colorCorrection then updateAtmosphere() end
+        end
+    })
+end
+
+-- ========================================================================
+-- 💾 TAB 7: CONFIGS & PRESETS UI
+-- ========================================================================
+do
+    local PresetSec = Tabs.Config:Section({ Side = "Left" })
+    PresetSec:Header({ Name = "Quick Combat Presets" })
+
+    PresetSec:Button({
+        Name = "⚡ Load Default HvH Preset",
+        Callback = function()
+            applyConfig(PRESETS.HvH)
+            Window:Notify({ Title = "Config Presets", Description = "Loaded 'Default HvH' preset!", Lifetime = 3 })
+        end
+    })
+
+    PresetSec:Button({
+        Name = "🛡️ Load Legit / Closet Preset",
+        Callback = function()
+            applyConfig(PRESETS.Legit)
+            Window:Notify({ Title = "Config Presets", Description = "Loaded 'Legit / Closet' preset!", Lifetime = 3 })
+        end
+    })
+
+    PresetSec:Button({
+        Name = "☠️ Load Blatant / Rage Preset",
+        Callback = function()
+            applyConfig(PRESETS.Blatant)
+            Window:Notify({ Title = "Config Presets", Description = "Loaded 'Blatant / Rage' preset!", Lifetime = 3 })
+        end
+    })
+
+    local FileSec = Tabs.Config:Section({ Side = "Right" })
+    FileSec:Header({ Name = "Custom Config File Management" })
+
+    local configInputName = "default"
+    FileSec:Input({
+        Name = "Config File Name",
+        Placeholder = "e.g. duels_hvh",
+        Default = "default",
+        Callback = function(v)
+            if v and #v > 0 then configInputName = v end
+        end
+    })
+
+    FileSec:Button({
+        Name = "💾 Save Current Config",
+        Callback = function()
+            local fname = saveConfigFile(configInputName)
+            Window:Notify({ Title = "Config Saved", Description = "Saved settings to " .. fname, Lifetime = 3.5 })
+        end
+    })
+
+    FileSec:Button({
+        Name = "📂 Load Selected Config",
+        Callback = function()
+            local ok, msg = loadConfigFile(configInputName)
+            Window:Notify({
+                Title = ok and "Config Loaded" or "Load Failed",
+                Description = msg,
+                Lifetime = 3.5
+            })
+        end
+    })
+
+    FileSec:Button({
+        Name = "🔄 Reset All to Defaults",
+        Callback = function()
+            applyConfig(PRESETS.HvH)
+            Window:Notify({ Title = "Reset Settings", Description = "Reset all features to clean defaults.", Lifetime = 3 })
+        end
+    })
+end
+
+-- 📡 2D ESP OVERLAY
+-- ========================================================================
+local espGui = Instance.new("ScreenGui")
+espGui.Name = "MidHub_McHvH_ESP"
+espGui.ResetOnSpawn = false
+espGui.IgnoreGuiInset = true
+espGui.Parent = getGuiContainer()
+
+
+-- No Jump Delay (Instant Land-to-Jump Event Hook)
+trackConn(UserInputService.JumpRequest:Connect(function()
+    if CFG.noJumpDelay then
+        local c = getChar()
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        if h and h.Health > 0 then
+            h:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end))
+
+local espPool = {}
+local function getEspTag(idx)
+    local t = espPool[idx]
+    if not t then
+        t = Instance.new("TextLabel")
+        t.Size = UDim2.fromOffset(220, 22)
+        t.AnchorPoint = Vector2.new(0.5, 0.5)
+        t.BackgroundTransparency = 1
+        t.Font = Enum.Font.Arcade
+        t.TextSize = 14
+        t.TextStrokeTransparency = 0
+        t.Visible = false
+        t.Parent = espGui
+        espPool[idx] = t
+    end
+    return t
+end
+
+-- ========================================================================
+-- 🔄 HVH LOOPS (YAW/SPINBOT, TARGET STRAFE, SPEED, KILL AURA, AUTO TRAP)
+-- ========================================================================
+
+do
+    local spinAngle = 0
+    local jitterFlip = false
+    local strafeAngle = 0
+    local lastStrafeTarget = nil
+
+    trackConn(RunService.RenderStepped:Connect(function(dt)
+    local c = getChar()
+    local root = getRoot(c)
+    local hum = getHum(c)
+    if not c or not root or not hum or hum.Health <= 0 then return end
+
+    if CFG.noSlowdown then
+        if c:GetAttribute("InCobweb") then c:SetAttribute("InCobweb", false) end
+        if c:GetAttribute("OnSoulSand") then c:SetAttribute("OnSoulSand", false) end
+        local isEatingOrBlocking = c:GetAttribute("EatingApple") or c:GetAttribute("Blocking") or c:GetAttribute("BowDrawStarted")
+        if isEatingOrBlocking or hum.WalkSpeed < 13.8 then
+            -- Maintain natural walk/sprint speed without artificial teleport +speed
+            local targetNormalSpeed = (c:GetAttribute("Sprinting") or CFG.alwaysSprint) and 17.95 or 13.81
+            if hum.WalkSpeed < targetNormalSpeed then
+                hum.WalkSpeed = targetNormalSpeed
+            end
+        end
+    end
+
+    -- 🌋 Anti-Lava System (Lava Barrier, Eject & Extinguish)
+    if CFG.antiLava then
+        local inLavaAttr = c:GetAttribute("InLava")
+        local courtyard = workspace:FindFirstChild("OvergrownCourtyard")
+        local lavaPool = courtyard and courtyard:FindFirstChild("LavaPool")
+        local lavaPart = lavaPool and lavaPool:FindFirstChild("Lava")
+        local isInsideLavaVolume = false
+        local lavaTopY = 2.56
+        if lavaPart then
+            lavaTopY = lavaPart.Position.Y + lavaPart.Size.Y / 2
+            local rel = lavaPart.CFrame:PointToObjectSpace(root.Position)
+            if math.abs(rel.X) <= (lavaPart.Size.X / 2 + 1) and math.abs(rel.Z) <= (lavaPart.Size.Z / 2 + 1) and rel.Y <= (lavaPart.Size.Y / 2 + 0.6) then
+                isInsideLavaVolume = true
+            end
+        end
+
+        if inLavaAttr or isInsideLavaVolume then
+            if inLavaAttr then
+                c:SetAttribute("InLava", false)
+            end
+            if root.Position.Y < lavaTopY + 1.2 then
+                root.CFrame = CFrame.new(root.Position.X, lavaTopY + 2.2, root.Position.Z)
+                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 32, root.AssemblyLinearVelocity.Z)
+            end
+            for _, child in ipairs(c:GetDescendants()) do
+                if child:IsA("Fire") or (child:IsA("ParticleEmitter") and child.Name:lower():find("fire")) then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end
+    end
+
+    -- 🕳️ Safe Ground Tracker & Anti-Void Catch
+    local curPos = root.Position
+    local isGrounded = hum.FloorMaterial ~= Enum.Material.Air and root.AssemblyLinearVelocity.Y >= -8
+    if isGrounded and curPos.Y > -10 then
+        local rayP = RaycastParams.new()
+        rayP.FilterType = Enum.RaycastFilterType.Exclude
+        rayP.FilterDescendantsInstances = { c, antiLavaBarrier }
+        local groundHit = workspace:Raycast(curPos, Vector3.new(0, -6, 0), rayP)
+        if groundHit and groundHit.Instance then
+            local hitName = groundHit.Instance.Name:lower()
+            if not hitName:find("lava") then
+                lastSafeGroundCFrame = root.CFrame
+                lastSafeGroundTime = os.clock()
+            end
+        end
+    end
+
+    if CFG.antiVoid and (os.clock() - lastAntiVoidTrigger) > 1.2 then
+        local triggerVoid = false
+        if curPos.Y < -22 then
+            triggerVoid = true
+        elseif root.AssemblyLinearVelocity.Y < -28 and lastSafeGroundCFrame and (lastSafeGroundCFrame.Position.Y - curPos.Y) > 14 then
+            local rayP = RaycastParams.new()
+            rayP.FilterType = Enum.RaycastFilterType.Exclude
+            rayP.FilterDescendantsInstances = { c }
+            local hit = workspace:Raycast(curPos, Vector3.new(0, -50, 0), rayP)
+            if not hit then
+                triggerVoid = true
+            end
+        end
+
+        if triggerVoid then
+            lastAntiVoidTrigger = os.clock()
+            if CFG.antiVoidMode == "Bounce" then
+                root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 65, root.AssemblyLinearVelocity.Z)
+                if lastSafeGroundCFrame then
+                    local toSafe = (lastSafeGroundCFrame.Position - curPos)
+                    local dir = Vector3.new(toSafe.X, 0, toSafe.Z).Unit
+                    root.AssemblyLinearVelocity = root.AssemblyLinearVelocity + dir * 25
+                end
+            else
+                if lastSafeGroundCFrame then
+                    root.CFrame = lastSafeGroundCFrame + Vector3.new(0, 3, 0)
+                    root.AssemblyLinearVelocity = Vector3.new(0, 15, 0)
+                else
+                    root.AssemblyLinearVelocity = Vector3.new(0, 60, 0)
+                end
+            end
+            if CFG.toggleNotifs then
+                showToggleNotification("Anti-Void (Caught)", true, Enum.KeyCode.Unknown)
+            end
+        end
+    end
+
+    if CFG.noclip then
+        for _, p in ipairs(c:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then
+                p.CanCollide = false
+            end
+        end
+    end
+
+    if CFG.bhopEnabled and hum.MoveDirection.Magnitude > 0.05 then
+        hum.Jump = true
+    end
+
+    if CFG.flyEnabled then
+        local moveVec = Vector3.zero
+        local camCF = camera.CFrame
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVec = moveVec + camCF.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec - camCF.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec + camCF.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec - camCF.RightVector end
+
+        -- Touch thumbstick support for mobile:
+        if moveVec.Magnitude < 0.05 and hum.MoveDirection.Magnitude > 0.05 then
+            local md = hum.MoveDirection
+            moveVec = Vector3.new(md.X, 0, md.Z)
+        end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or (UserInputService.TouchEnabled and hum.Jump) then
+            moveVec = moveVec + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            moveVec = moveVec - Vector3.new(0, 1, 0)
+        end
+
+        root.AssemblyLinearVelocity = Vector3.zero
+        if moveVec.Magnitude > 0 then
+            root.CFrame = root.CFrame + moveVec.Unit * (CFG.flySpeed * dt)
+        end
+    else
+        -- Compute Kill Aura target first so Target Strafe and Aura rotation can utilize it
+        local activeAuraTarget = nil
+        if CFG.killAura and not (isInSpawnSafezone(root.Position) and not c:GetAttribute("DuelId")) then
+            local t, d = getClosestEnemy(math.min(CFG.auraReach, 9.5) + 1.1)
+            if t and d <= (math.min(CFG.auraReach, 9.5) + 1.1) then
+                activeAuraTarget = t
+            end
+        end
+
+        -- No Jump Delay ground check
+        if CFG.noJumpDelay and hum and hum.Health > 0 then
+            if (UserInputService:IsKeyDown(Enum.KeyCode.Space) or hum.Jump) and hum.FloorMaterial ~= Enum.Material.Air then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                hum.Jump = true
+            end
+        end
+
+        local function getStrafeTarget()
+            if activeAuraTarget and activeAuraTarget:FindFirstChild("HumanoidRootPart") then
+                return activeAuraTarget
+            end
+            local enemy, d = getClosestEnemy(math.max(CFG.strafeRadius + 3.5, 9.5))
+            if enemy and d <= math.max(CFG.strafeRadius + 3.5, 9.5) then
+                return enemy
+            end
+            return nil
+        end
+
+        local strafeTarget = CFG.targetStrafe and getStrafeTarget() or nil
+        local isStrafing = false
+        if CFG.targetStrafe and strafeTarget then
+            local tRoot = strafeTarget:FindFirstChild("HumanoidRootPart")
+            if tRoot then
+                local myPos = root.Position
+                local tPos = tRoot.Position
+                local diff = Vector3.new(tPos.X - myPos.X, 0, tPos.Z - myPos.Z)
+                local curDist = diff.Magnitude
+
+                if curDist >= 0.2 then
+                    isStrafing = true
+                    local toTarget = diff.Unit
+                    local strafeDir = CFG.strafeDirection or 1
+                    local effectiveSpeed = CFG.acSafeSpeed and math.clamp(CFG.strafeSpeed, 12.0, 18.2) or CFG.strafeSpeed
+                    local effectiveRadius = math.clamp(CFG.strafeRadius, 3.0, 8.0)
+
+                    -- Tangent perpendicular vector (cross product around enemy)
+                    local tangent = Vector3.new(-toTarget.Z, 0, toTarget.X) * strafeDir
+
+                    -- Radial steering: smoothly pull inward if too far, push outward if too close
+                    local distError = curDist - effectiveRadius
+                    local steerWeight = math.clamp(distError / 2.5, -1.0, 1.0)
+                    local steerDir = toTarget * steerWeight
+
+                    -- Composite move direction (smoothly blended unit vector)
+                    local moveDir = (tangent * (1 - math.abs(steerWeight) * 0.45) + steerDir).Unit
+
+                    -- Frame displacement strictly clamped to effectiveSpeed * dt (NO SNAPPING / RUBBERBANDING!)
+                    local step = moveDir * (effectiveSpeed * dt)
+
+                    -- Smooth yaw facing enemy
+                    local lookAngle = math.atan2(-toTarget.X, -toTarget.Z)
+                    root.CFrame = CFrame.new(root.Position + step) * CFrame.Angles(0, lookAngle, 0)
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * effectiveSpeed, root.AssemblyLinearVelocity.Y, moveDir.Z * effectiveSpeed)
+
+                    -- Wall collision check (auto-reverses direction on wall hit)
+                    local rayP = RaycastParams.new()
+                    rayP.FilterType = Enum.RaycastFilterType.Exclude
+                    rayP.FilterDescendantsInstances = { c, strafeTarget }
+                    local wallHit = workspace:Raycast(root.Position, moveDir * 2.2, rayP)
+                    if wallHit and wallHit.Instance and wallHit.Instance.CanCollide then
+                        CFG.strafeDirection = -(CFG.strafeDirection or 1)
+                    end
+
+                    -- Auto bhop while strafing
+                    if hum.FloorMaterial ~= Enum.Material.Air then
+                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                        hum.Jump = true
+                    end
+                end
+            end
+        else
+            lastStrafeTarget = nil
+        end
+
+        if not isStrafing then
+            local moveVec = Vector3.zero
+            local camCF = camera.CFrame
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then moveVec = moveVec + camCF.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then moveVec = moveVec - camCF.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then moveVec = moveVec + camCF.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then moveVec = moveVec - camCF.RightVector end
+
+            if moveVec.Magnitude < 0.05 and hum.MoveDirection.Magnitude > 0.05 then
+                moveVec = hum.MoveDirection
+            end
+
+            local horiz = Vector3.new(moveVec.X, 0, moveVec.Z)
+
+            if CFG.speedEnabled and horiz.Magnitude > 0.05 then
+                local baseSpd = CFG.speedValue or 18.2
+                local spd = CFG.acSafeSpeed and math.clamp(baseSpd, 14.0, 18.5) or baseSpd
+                hum.WalkSpeed = spd
+                local moveDir = horiz.Unit
+                local step = moveDir * (spd * dt)
+                root.CFrame = root.CFrame + step
+                root.AssemblyLinearVelocity = Vector3.new(moveDir.X * spd, root.AssemblyLinearVelocity.Y, moveDir.Z * spd)
+
+                if (CFG.bhopEnabled or CFG.noJumpDelay) and hum.FloorMaterial ~= Enum.Material.Air then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    hum.Jump = true
+                end
+            elseif (CFG.bhopEnabled or CFG.noJumpDelay) and horiz.Magnitude > 0.05 and hum.FloorMaterial ~= Enum.Material.Air then
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) or CFG.bhopEnabled then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    hum.Jump = true
+                end
+            end
+        end
+
+        -- Align Horizontal Root CFrame only if NOT currently Target Strafing (strafing already faces target directly!)
+        if not isStrafing then
+            if activeAuraTarget then
+                local tRoot = activeAuraTarget:FindFirstChild("HumanoidRootPart")
+                if tRoot then
+                    local pos = root.Position
+                    local d = tRoot.Position - pos
+                    if Vector3.new(d.X, 0, d.Z).Magnitude > 0.05 then
+                        local targetYaw = math.atan2(-d.X, -d.Z)
+                        hum.AutoRotate = false
+                        root.CFrame = CFrame.new(pos) * CFrame.Angles(0, targetYaw, 0)
+                    end
+                end
+            elseif CFG.yawEnabled then
+                local pos = root.Position
+                local camLook = camera.CFrame.LookVector
+                local baseYaw = math.atan2(-camLook.X, -camLook.Z)
+                local finalYaw = baseYaw
+
+                if CFG.yawMode == "Spinbot 360°" then
+                    spinAngle = (spinAngle + CFG.spinSpeed * dt) % 360
+                    finalYaw = math.rad(spinAngle)
+                elseif CFG.yawMode == "Jitter Desync" then
+                    jitterFlip = not jitterFlip
+                    local offset = jitterFlip and CFG.jitterAngle or -CFG.jitterAngle
+                    finalYaw = baseYaw + math.rad(180 + offset)
+                elseif CFG.yawMode == "Backwards (180°)" then
+                    finalYaw = baseYaw + math.pi
+                elseif CFG.yawMode == "Face Target" then
+                    local enemy = getClosestEnemy(25)
+                    local eRoot = enemy and enemy:FindFirstChild("HumanoidRootPart")
+                    if eRoot then
+                        local d = eRoot.Position - pos
+                        finalYaw = math.atan2(-d.X, -d.Z)
+                    end
+                elseif CFG.yawMode == "Static Offset" then
+                    finalYaw = baseYaw + math.rad(CFG.staticYawOffset or 180)
+                end
+
+                hum.AutoRotate = false
+                root.CFrame = CFrame.new(pos) * CFrame.Angles(0, finalYaw, 0)
+            else
+                hum.AutoRotate = true
+            end
+        end
+    end
+end))
+end
+
+-- Helper: Wall / Line-of-Sight check matching MinecraftCombatClient performAttack (lines 390-406)
+local function isLineOfSightClear(eyePos, unitDir, hitDist)
+    local exclude = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            table.insert(exclude, plr.Character)
+        end
+    end
+    local predFolder = workspace:FindFirstChild("PredictedBlocks")
+    if predFolder then
+        table.insert(exclude, predFolder)
+    end
+    if trapAnchorFolder then
+        table.insert(exclude, trapAnchorFolder)
+    end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = exclude
+    params.IgnoreWater = true
+
+    local wallHit = workspace:Raycast(eyePos, unitDir * hitDist, params)
+    if wallHit and wallHit.Distance < (hitDist - 0.01) then
+        return false
+    end
+    return true
+end
+
+-- 2. Silent Kill Aura Loop (AC-AURA Safe)
+task.spawn(function()
+    local lastSprintFireClock = 0
+    local hitSwitchToggle = false
+    while true do
+        local safeCps = math.clamp(CFG.auraCps, 4, 13)
+        local baseDelay = 1 / safeCps
+        local jitterSec = (math.random(-12, 22) / 1000)
+        local delaySec = math.clamp(baseDelay + jitterSec, 0.076, 0.35)
+        task.wait(delaySec)
+        if not espGui.Parent then break end
+
+        local c = getChar()
+        local myRoot = getRoot(c)
+        local myHum = getHum(c)
+        if not c or not myRoot or not myHum or myHum.Health <= 0 then
+            targetHighlight.Enabled = false
+            continue
+        end
+
+        -- Throttled Auto-Sprint (only fire when moving and not already sprinting)
+        if CFG.alwaysSprint and SprintRemote then
+            local now = os.clock()
+            if myHum.MoveDirection.Magnitude > 0.1 and c:GetAttribute("Sprinting") ~= true and (now - lastSprintFireClock) > 0.65 then
+                lastSprintFireClock = now
+                pcall(function() SprintRemote:FireServer(true) end)
+            end
+        end
+
+        if CFG.killAura and AttackRemote then
+            -- If on SkySpawn safezone (Y > 68), skip attacking immune spawn players
+            if isInSpawnSafezone(myRoot.Position) and not c:GetAttribute("DuelId") then
+                targetHighlight.Enabled = false
+                targetHighlight.Adornee = nil
+                continue
+            end
+
+            -- Respect global attack cooldown (including manual left-clicks in MinecraftCombatClient)
+            if (os.clock() - getLastAttackClock()) < 0.078 then
+                continue
+            end
+
+            local maxAllowedReach = math.min(CFG.auraReach, 9.5)
+            local searchDist = maxAllowedReach + (CFG.backtrackEnabled and 3.2 or 1.0)
+            local target, dist = getClosestEnemy(searchDist)
+            if target and dist <= searchDist then
+                if CFG.highlightTarget then
+                    targetHighlight.Adornee = target
+                    targetHighlight.Enabled = true
+                else
+                    targetHighlight.Enabled = false
+                end
+
+                local isTrappingNow = (os.clock() - lastTrapHoldClock) < 0.18
+                if CFG.autoEquipSword and not isTrappingNow and not c:GetAttribute("EatingApple") and not c:GetAttribute("BowDrawStarted") then
+                    equipToolFast("Diamond Sword")
+                end
+
+                local tRoot = target:FindFirstChild("HumanoidRootPart")
+                if tRoot and not isTrappingNow and not c:GetAttribute("EatingApple") and not c:GetAttribute("BowDrawStarted") then
+                    local targetPlr = Players:GetPlayerFromCharacter(target)
+                    local targetSneaking = target:GetAttribute("Sneaking") == true
+                    local targetHitPos = tRoot.Position
+                    local targetHitTime = workspace:GetServerTimeNow()
+                    local isBacktracking = false
+
+                    -- Check if target is outside normal reach; if so, test recent backtrack history
+                    local curDist = (tRoot.Position - myRoot.Position).Magnitude
+                    if curDist > maxAllowedReach and CFG.backtrackEnabled and targetPlr then
+                        local hist = backtrackHistory[targetPlr]
+                        if hist and #hist > 0 then
+                            for _, tick in ipairs(hist) do
+                                local tickDist = (tick.pos - myRoot.Position).Magnitude
+                                if tickDist <= maxAllowedReach then
+                                    targetHitPos = tick.pos
+                                    targetHitTime = tick.serverTime
+                                    targetSneaking = tick.sneaking
+                                    isBacktracking = true
+                                    if CFG.backtrackVisuals then
+                                        updateBacktrackGhost(target, tick.cf)
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    else
+                        if CFG.backtrackVisuals then
+                            cleanupBacktrackGhost()
+                        end
+                    end
+
+                    local isSneaking = c:GetAttribute("Sneaking") == true
+                    local eye = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Eye)
+                        and MinecraftMeleeGeometry.Eye(myRoot.Position, isSneaking)
+                        or (myRoot.Position + Vector3.new(0, isSneaking and 1.15 or 1.5, 0))
+
+                    local chosenPart = CFG.auraHitPart
+                    if chosenPart == "Switch" then
+                        hitSwitchToggle = not hitSwitchToggle
+                        chosenPart = hitSwitchToggle and "Head" or "Body"
+                    end
+
+                    -- Subtle human aim jitter so consecutive attacks never have 0.000000 vector variance
+                    local aimJitter = Vector3.new(
+                        math.random(-15, 15) / 100,
+                        math.random(-10, 10) / 100,
+                        math.random(-15, 15) / 100
+                    )
+
+                    local topY = targetSneaking and 1.82 or 2.15
+                    local headY = targetSneaking and 1.05 or 1.32
+                    local headOff = Vector3.new(0, headY, 0) + aimJitter
+                    local bodyOff = Vector3.new(0, -0.32, 0) + aimJitter
+                    local lowOff  = Vector3.new(0, -1.65, 0) + aimJitter
+
+                    -- Multipoint Hitbox Edge Scanner:
+                    -- Server hitbox in MinecraftMeleeGeometry is [-0.96..0.96] XZ and [-4.0..2.3] Y.
+                    -- If center is blocked by a wall/cage, scan crown, corners, and lower/under-block edges for any clear ray!
+                    local primary = (chosenPart == "Head") and { headOff, bodyOff, lowOff } or { bodyOff, headOff, lowOff }
+                    local multipointEdges = {
+                        primary[1],
+                        primary[2],
+                        primary[3],
+                        Vector3.new( 0,     topY,  0)    + aimJitter * 0.4, -- Top of head (hits over 1-block walls)
+                        Vector3.new( 0.86,  0.25,  0.86) + aimJitter * 0.3, -- Corner NE
+                        Vector3.new(-0.86,  0.25,  0.86) + aimJitter * 0.3, -- Corner NW
+                        Vector3.new( 0.86,  0.25, -0.86) + aimJitter * 0.3, -- Corner SE
+                        Vector3.new(-0.86,  0.25, -0.86) + aimJitter * 0.3, -- Corner SW
+                        Vector3.new( 0.88, -1.80,  0)    + aimJitter * 0.3, -- Lower East edge
+                        Vector3.new(-0.88, -1.80,  0)    + aimJitter * 0.3, -- Lower West edge
+                        Vector3.new( 0,    -1.80,  0.88) + aimJitter * 0.3, -- Lower South edge
+                        Vector3.new( 0,    -1.80, -0.88) + aimJitter * 0.3, -- Lower North edge
+                        Vector3.new( 0,    -3.45,  0)    + aimJitter * 0.3, -- Under-block bottom hitbox (-4.0 server box)
+                    }
+
+                    local unitDir = nil
+                    local hitDist = nil
+                    local hitPartName = nil
+
+                    if MinecraftMeleeGeometry and MinecraftMeleeGeometry.Hit then
+                        for _, off in ipairs(multipointEdges) do
+                            local candDir = ((targetHitPos + off) - eye).Unit
+                            -- Always pass the server's exact 9.600000000000001 reach constant to Hit()
+                            local d, hp = MinecraftMeleeGeometry.Hit(
+                                eye,
+                                candDir,
+                                targetHitPos,
+                                targetSneaking,
+                                9.600000000000001
+                            )
+                            if d and d <= maxAllowedReach and isLineOfSightClear(eye, candDir, d) then
+                                unitDir = candDir
+                                hitDist = d
+                                hitPartName = hp or chosenPart
+                                break
+                            end
+                        end
+                    end
+
+                    -- Strictly require a valid MinecraftMeleeGeometry intersection within <= maxAllowedReach (<= 9.5)
+                    -- AND clear line-of-sight (already verified inside multipoint loop)
+                    if unitDir and hitDist and hitDist <= maxAllowedReach then
+                        -- Align horizontal Root CFrame with unitDir before firing so LookVector matches attack direction
+                        local horizDir = Vector3.new(unitDir.X, 0, unitDir.Z)
+                        if horizDir.Magnitude > 0.05 then
+                            local aimYaw = math.atan2(-horizDir.X, -horizDir.Z)
+                            myRoot.CFrame = CFrame.new(myRoot.Position) * CFrame.Angles(0, aimYaw, 0)
+                        end
+
+                        local seq = getNextAttackSeqAndSwing(c)
+
+                        local payload = {
+                            version = 2,
+                            character = c,
+                            seq = seq,
+                            sentAt = targetHitTime,
+                            eye = eye,
+                            targetRoot = targetHitPos,
+                            hitPart = hitPartName,
+                        }
+
+                        if CFG.criticalsEnabled then
+                            applyCriticalsPreAttack(myRoot, myHum, payload)
+                        end
+
+                        if MeleeHitVisuals and MeleeHitVisuals.Predict then
+                            pcall(MeleeHitVisuals.Predict, target)
+                        end
+
+                        -- Pass exact unmodified hitDist returned by MinecraftMeleeGeometry.Hit
+                        pcall(function()
+                            AttackRemote:FireServer(target, eye + unitDir * hitDist, unitDir, nil, payload)
+                        end)
+
+                        if CFG.criticalsEnabled and CFG.critVisualStars then
+                            spawnCriticalHitEffect(target)
+                        end
+
+                        -- Backtrap / Behind-Wall Knockback Deflector
+                        if CFG.backtrapEnabled and BuildingAction then
+                            task.spawn(function()
+                                local horizUnit = horizDir.Unit
+                                local behindPos = tRoot.Position + horizUnit * (CFG.backtrapDistance or 3.2)
+                                local targetGrid = (MinecraftBlockPlacement and MinecraftBlockPlacement.Snap) and MinecraftBlockPlacement.Snap(behindPos) or behindPos
+                                if not isBlockAt(targetGrid) then
+                                    placeBlockAtGridPos(targetGrid)
+                                end
+                                if CFG.backtrapDoubleHeight then
+                                    local upperGrid = targetGrid + Vector3.new(0, 3.2, 0)
+                                    if not isBlockAt(upperGrid) then
+                                        task.wait(0.02)
+                                        placeBlockAtGridPos(upperGrid)
+                                    end
+                                end
+                            end)
+                        end
+                    end
+                end
+            else
+                targetHighlight.Enabled = false
+                targetHighlight.Adornee = nil
+                if CFG.backtrackVisuals then
+                    cleanupBacktrackGhost()
+                end
+            end
+        end
+    end
+end)
+
+-- 3. Ultra-Fast Burst Auto Trap, Scaffold, Auto Break Trap, Sneak Spam, Auto Gapple & Bow Aimbot Loop
+task.spawn(function()
+    local sneakToggleState = false
+    while task.wait(0.025) do
+        if not espGui.Parent then break end
+        local c = getChar()
+        local myRoot = getRoot(c)
+        local myHum = getHum(c)
+        if not c or not myRoot or not myHum or myHum.Health <= 0 then continue end
+
+        if CFG.sneakSpam and MinecraftSneak then
+            sneakToggleState = not sneakToggleState
+            pcall(function() MinecraftSneak:FireServer(sneakToggleState) end)
+        end
+
+        local placedThisTick = false
+
+        if CFG.autoTrap and not isInSpawnSafezone(myRoot.Position) then
+            local enemy = getClosestEnemy(CFG.trapRange)
+            local eRoot = enemy and enemy:FindFirstChild("HumanoidRootPart")
+            if eRoot then
+                local center = getEntityFeetGridCenter(eRoot.Position)
+                local offsets = getTrapOffsets(CFG.trapMode)
+                local burstPlacedCount = 0
+                for _, off in ipairs(offsets) do
+                    local targetGrid = center + off
+                    if not isBlockAt(targetGrid) and (targetGrid - myRoot.Position).Magnitude <= 17.5 then
+                        if placeBlockAtGridPos(targetGrid) then
+                            placedThisTick = true
+                            burstPlacedCount = burstPlacedCount + 1
+                            if burstPlacedCount >= 5 then
+                                break
+                            end
+                            task.wait(0.016)
+                            c = getChar()
+                            myRoot = getRoot(c)
+                            if not c or not myRoot then break end
+                        end
+                    end
+                end
+            end
+        end
+
+        if CFG.scaffoldEnabled and not placedThisTick and not isInSpawnSafezone(myRoot.Position) then
+            local feetCell = getEntityFeetGridCenter(myRoot.Position)
+            local underPos = feetCell - Vector3.new(0, 3.2, 0)
+            if placeBlockAtGridPos(underPos) then
+                placedThisTick = true
+            end
+            local moveDir = myHum.MoveDirection
+            if moveDir.Magnitude > 0.05 then
+                local aheadCell = getEntityFeetGridCenter(myRoot.Position + Vector3.new(moveDir.X, 0, moveDir.Z).Unit * 2.8)
+                local aheadUnder = aheadCell - Vector3.new(0, 3.2, 0)
+                if not isBlockAt(aheadUnder) then
+                    if placedThisTick then task.wait(0.016) end
+                    if placeBlockAtGridPos(aheadUnder) then
+                        placedThisTick = true
+                    end
+                end
+            end
+        end
+
+        -- Restore previous weapon (e.g. Diamond Sword) 0.16s after finishing trap/scaffold burst
+        if not placedThisTick and toolBeforeTrap and (os.clock() - lastTrapHoldClock) > 0.16 then
+            if not c:GetAttribute("EatingApple") then
+                equipToolFast(toolBeforeTrap)
+            end
+            toolBeforeTrap = nil
+        end
+
+        if CFG.autoBreakTrap and BuildingAction then
+            local pb = workspace:FindFirstChild("PlayerBlocks")
+            if pb then
+                for _, b in ipairs(pb:GetChildren()) do
+                    local bPos = b:IsA("BasePart") and b.Position or b:GetPivot().Position
+                    if (bPos - myRoot.Position).Magnitude <= 5.5 and bPos.Y >= myRoot.Position.Y - 1.5 then
+                        equipToolFast("Diamond Pickaxe")
+                        local head = c:FindFirstChild("Head")
+                        local origin = (head and head.Position) or myRoot.Position
+                        local dir = (bPos - origin).Unit
+                        pcall(function()
+                            BuildingAction:FireServer("MineStart", dir)
+                            task.delay(0.43, function()
+                                BuildingAction:FireServer("MineFinish", dir)
+                            end)
+                        end)
+                        break
+                    end
+                end
+            end
+        end
+
+        if CFG.autoGapple and EatGoldenApple then
+            if myHum.Health <= CFG.gappleHpThreshold and not c:GetAttribute("EatingApple") then
+                local gapTool = equipToolFast("Golden Apple")
+                if gapTool then
+                    pcall(function() EatGoldenApple:FireServer("Begin") end)
+                end
+            end
+        end
+
+        if CFG.bowAimbot and MinecraftBowAction and c:FindFirstChild("Bow") then
+            local enemy = getClosestEnemy(CFG.bowRange)
+            local eRoot = enemy and enemy:FindFirstChild("HumanoidRootPart")
+            if eRoot then
+                pcall(function()
+                    MinecraftBowAction:FireServer("Draw")
+                    task.delay(0.22, function()
+                        if eRoot and eRoot.Parent and myRoot and myRoot.Parent then
+                            local dist = (eRoot.Position - myRoot.Position).Magnitude
+                            local dropComp = Vector3.new(0, dist * 0.045, 0)
+                            local velComp = eRoot.AssemblyLinearVelocity * (dist / 110)
+                            local aimDir = ((eRoot.Position + velComp + dropComp) - (myRoot.Position + Vector3.new(0, 1.5, 0))).Unit
+                            MinecraftBowAction:FireServer("Release", aimDir)
+                        end
+                    end)
+                end)
+            end
+        end
+    end
+end)
+
+-- 4. 2D ESP Render Loop
+trackConn(RunService.RenderStepped:Connect(function()
+    local myRoot = getRoot()
+    local count = 0
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp then
+            local esp = createPlayerEsp(plr)
+            local char = plr.Character
+            local r = char and char:FindFirstChild("HumanoidRootPart")
+            local h = char and char:FindFirstChildOfClass("Humanoid")
+
+            if CFG.espEnabled and myRoot and r and h and h.Health > 0 then
+                local rootScreen, onScreen = camera:WorldToViewportPoint(r.Position)
+                if onScreen and esp then
+                    local topScreen = camera:WorldToViewportPoint(r.Position + Vector3.new(0, 2.6, 0))
+                    local botScreen = camera:WorldToViewportPoint(r.Position - Vector3.new(0, 3.2, 0))
+                    local boxH = math.abs(botScreen.Y - topScreen.Y)
+                    local boxW = math.clamp(boxH * 0.65, 12, 450)
+                    local boxX = rootScreen.X - boxW / 2
+                    local boxY = topScreen.Y
+
+                    local dist = (r.Position - myRoot.Position).Magnitude
+                    local inReach = dist <= (CFG.auraReach or 9.2)
+                    local mainColor = inReach and Color3.fromRGB(255, 65, 95) or Color3.fromRGB(168, 85, 247)
+
+                    -- 2D Bounding Box
+                    if CFG.espBox2D then
+                        esp.boxOutline.Size = Vector2.new(boxW, boxH)
+                        esp.boxOutline.Position = Vector2.new(boxX, boxY)
+                        esp.boxOutline.Visible = true
+
+                        esp.box.Size = Vector2.new(boxW, boxH)
+                        esp.box.Position = Vector2.new(boxX, boxY)
+                        esp.box.Color = mainColor
+                        esp.box.Visible = true
+                    else
+                        esp.boxOutline.Visible = false
+                        esp.box.Visible = false
+                    end
+
+                    -- Dynamic Health Bar
+                    if CFG.espHealthBar then
+                        local hpPct = math.clamp(h.Health / math.max(1, h.MaxHealth), 0, 1)
+                        local barW = 3
+                        local barH = math.max(2, boxH * hpPct)
+
+                        esp.hpOutline.Position = Vector2.new(boxX - 6, boxY - 1)
+                        esp.hpOutline.Size = Vector2.new(barW + 2, boxH + 2)
+                        esp.hpOutline.Visible = true
+
+                        esp.hpBar.Position = Vector2.new(boxX - 5, boxY + (boxH - barH))
+                        esp.hpBar.Size = Vector2.new(barW, barH)
+                        esp.hpBar.Color = Color3.fromHSV(hpPct * 0.33, 0.9, 0.95)
+                        esp.hpBar.Visible = true
+                    else
+                        esp.hpOutline.Visible = false
+                        esp.hpBar.Visible = false
+                    end
+
+                    -- Name Label
+                    if CFG.espName then
+                        esp.nameLbl.Position = Vector2.new(rootScreen.X, boxY - 16)
+                        esp.nameLbl.Text = plr.DisplayName
+                        esp.nameLbl.Color = inReach and Color3.fromRGB(255, 200, 210) or Color3.fromRGB(255, 255, 255)
+                        esp.nameLbl.Visible = true
+                    else
+                        esp.nameLbl.Visible = false
+                    end
+
+                    -- Distance & Hearts
+                    if CFG.espDistance then
+                        local hearts = math.ceil(h.Health / 2)
+                        esp.distLbl.Position = Vector2.new(rootScreen.X, boxY + boxH + 2)
+                        esp.distLbl.Text = string.format("[%.0f♥]  %.0fm", hearts, dist)
+                        esp.distLbl.Color = inReach and Color3.fromRGB(255, 120, 140) or Color3.fromRGB(215, 215, 235)
+                        esp.distLbl.Visible = true
+                    else
+                        esp.distLbl.Visible = false
+                    end
+
+                    -- Weapon / Tool Tag
+                    if CFG.espWeapon then
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then
+                            esp.weaponLbl.Position = Vector2.new(rootScreen.X, boxY + boxH + 15)
+                            esp.weaponLbl.Text = tool.Name
+                            esp.weaponLbl.Visible = true
+                        else
+                            esp.weaponLbl.Visible = false
+                        end
+                    else
+                        esp.weaponLbl.Visible = false
+                    end
+
+                    -- Fallback ScreenGui Label
+                    count = count + 1
+                    local lbl = getEspTag(count)
+                    lbl.Visible = false
+                else
+                    hidePlayerEsp(esp)
+                end
+            else
+                hidePlayerEsp(esp)
+            end
+        end
+    end
+
+    for i = count + 1, #espPool do
+        espPool[i].Visible = false
+    end
+end))
+
+-- ========================================================================
+-- 🕒 BACKTRACK SAMPLING LOOP
+-- ========================================================================
+trackConn(RunService.Heartbeat:Connect(function()
+    if not CFG.backtrackEnabled then
+        if next(backtrackHistory) then
+            table.clear(backtrackHistory)
+        end
+        cleanupBacktrackGhost()
+        return
+    end
+
+    local now = os.clock()
+    local sNow = workspace:GetServerTimeNow()
+    local maxAge = math.clamp((CFG.backtrackMs or 150) / 1000, 0.05, 0.35)
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and plr.Character and canAttackTarget(plr.Character) then
+            local char = plr.Character
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if root and hum and hum.Health > 0 then
+                local hist = backtrackHistory[plr]
+                if not hist then
+                    hist = {}
+                    backtrackHistory[plr] = hist
+                end
+
+                table.insert(hist, 1, {
+                    cf = root.CFrame,
+                    pos = root.Position,
+                    time = now,
+                    serverTime = sNow,
+                    sneaking = char:GetAttribute("Sneaking") == true
+                })
+
+                while #hist > 0 and (now - hist[#hist].time) > maxAge do
+                    table.remove(hist)
+                end
+            else
+                backtrackHistory[plr] = nil
+            end
+        else
+            backtrackHistory[plr] = nil
+        end
+    end
+end))
+
+-- ========================================================================
+-- 👻 FAKE LAG / REPLICATION CHOKING LOOP (HvH DESYNC)
+-- ========================================================================
+do
+    local fakeLagCounter     = 0
+    local fakeLagTargetChoke = 5
+    local fakeLagLastSentCF  = nil
+    local fakeLagLastSentPos = nil
+    local fakeLagIsChoking   = false
+
+    trackConn(RunService.Heartbeat:Connect(function()
+        if not CFG.fakeLagEnabled then
+            if fakeLagIsChoking then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                local c = getChar()
+                local root = getRoot(c)
+                if root then
+                    pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                end
+            end
+            cleanupFakeLagGhost()
+            return
+        end
+
+        local c = getChar()
+        local root = getRoot(c)
+        local hum = getHum(c)
+        if not c or not root or not hum or hum.Health <= 0 then
+            if fakeLagIsChoking then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+            end
+            cleanupFakeLagGhost()
+            return
+        end
+
+        local isMoving = (hum.MoveDirection.Magnitude > 0.05 or root.AssemblyLinearVelocity.Magnitude > 1.0)
+        if CFG.fakeLagMode == "Adaptive" and not isMoving then
+            if fakeLagIsChoking then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                fakeLagLastSentCF = root.CFrame
+                fakeLagLastSentPos = root.Position
+                updateFakeLagGhost(fakeLagLastSentCF, c)
+            end
+            return
+        end
+
+        local curPos = root.Position
+        local distFromSent = fakeLagLastSentPos and (curPos - fakeLagLastSentPos).Magnitude or 0
+        local acLimit = 2.8 -- Safe threshold below server AC teleport kick
+
+        if fakeLagIsChoking then
+            fakeLagCounter = fakeLagCounter + 1
+            local shouldRelease = (fakeLagCounter >= fakeLagTargetChoke)
+            if CFG.fakeLagAcGuard and distFromSent >= acLimit then
+                shouldRelease = true
+            end
+
+            if shouldRelease then
+                fakeLagIsChoking = false
+                fakeLagCounter = 0
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                fakeLagLastSentCF = root.CFrame
+                fakeLagLastSentPos = root.Position
+                updateFakeLagGhost(fakeLagLastSentCF, c)
+            else
+                pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
+            end
+        else
+            fakeLagIsChoking = true
+            fakeLagCounter = 0
+            if CFG.fakeLagMode == "Jitter" then
+                local minChoke = math.max(2, math.floor(CFG.fakeLagChokeTicks * 0.5))
+                local maxChoke = math.min(10, math.ceil(CFG.fakeLagChokeTicks * 1.4))
+                fakeLagTargetChoke = math.random(minChoke, maxChoke)
+            else
+                fakeLagTargetChoke = CFG.fakeLagChokeTicks
+            end
+            fakeLagLastSentCF = root.CFrame
+            fakeLagLastSentPos = root.Position
+            updateFakeLagGhost(fakeLagLastSentCF, c)
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", true)
+        end
+    end))
+end
+
+-- Silent Aim Hook for manual clicks (ViewportPointToRay in performAttack)
+if type(STATE) == "table" and type(STATE.namecallHook) == "function" then
+    pcall(function()
+        STATE.namecallHook("ViewportPointToRay", function(self, method, ...)
+            if CFG.killAura and self == workspace.CurrentCamera then
+                local c = getChar()
+                local myRoot = getRoot(c)
+                if c and myRoot and not isInSpawnSafezone(myRoot.Position) then
+                    local target = getClosestEnemy(math.max(CFG.auraReach, 10.4))
+                    local tRoot = target and target:FindFirstChild("HumanoidRootPart")
+                    if tRoot then
+                        local isSneaking = c:GetAttribute("Sneaking") == true
+                        local eye = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Eye)
+                            and MinecraftMeleeGeometry.Eye(myRoot.Position, isSneaking)
+                            or (myRoot.Position + Vector3.new(0, isSneaking and 1.15 or 1.5, 0))
+                        local aimPt = tRoot.Position + ((CFG.auraHitPart == "Body") and Vector3.new(0, -0.35, 0) or Vector3.new(0, 1.35, 0))
+                        return Ray.new(eye, (aimPt - eye).Unit)
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+-- Cleanup Registration
+ENV.__MIDHUB_MCHVH_CLEANUP = function()
+    for _, conn in ipairs(connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    table.clear(connections)
+
+    if MinecraftKnockback then
+        if origKbApply then MinecraftKnockback.Apply = origKbApply end
+        if origKbScale then MinecraftKnockback.ScaleHorizontal = origKbScale end
+    end
+    if MinecraftMeleeGeometry and origReach then
+        MinecraftMeleeGeometry.Reach = origReach
+    end
+    if MinecraftSoulSand then
+        if origSoulSpeed then MinecraftSoulSand.SpeedScale = origSoulSpeed end
+        if origSoulDrag then MinecraftSoulSand.Drag = origSoulDrag end
+    end
+    if CosmeticsCatalog and origCanEquip then
+        CosmeticsCatalog.CanEquip = origCanEquip
+    end
+    if trapAnchorFolder and trapAnchorFolder.Parent then
+        pcall(function() trapAnchorFolder:Destroy() end)
+    end
+    if antiLavaBarrier and antiLavaBarrier.Parent then
+        pcall(function() antiLavaBarrier:Destroy() end)
+    end
+    if targetHighlight then
+        pcall(function() targetHighlight:Destroy() end)
+    end
+    if hudGui and hudGui.Parent then
+        pcall(function() hudGui:Destroy() end)
+    end
+    if espGui and espGui.Parent then
+        pcall(function() espGui:Destroy() end)
+    end
+    if mobileToggleGui and mobileToggleGui.Parent then
+        pcall(function() mobileToggleGui:Destroy() end)
+    end
+    if Window and Window.Unload then
+        pcall(function() Window:Unload() end)
+    end
+    for plr, _ in pairs(espRegistry) do
+        cleanupPlayerEsp(plr)
+    end
+    table.clear(espRegistry)
+    cleanupFakeLagGhost()
+    cleanupBacktrackGhost()
+    table.clear(backtrackHistory)
+    pcall(function()
+        local c = lp.Character
+        local root = c and c:FindFirstChild("HumanoidRootPart")
+        if root then
+            sethiddenproperty(root, "NetworkIsSleeping", false)
+        end
+    end)
+    if rainEmitter then pcall(function() rainEmitter:Destroy() end) end
+    if rainAttachment then pcall(function() rainAttachment:Destroy() end) end
+    if rainSound then pcall(function() rainSound:Stop() rainSound:Destroy() end) end
+    if colorCorrEffect then pcall(function() colorCorrEffect:Destroy() end) end
+    if originalSkyProps and originalSky then
+        for prop, val in pairs(originalSkyProps) do
+            pcall(function() originalSky[prop] = val end)
+        end
+    end
+end
+
+if type(STATE) == "table" and type(STATE.onCleanup) == "function" then
+    pcall(STATE.onCleanup, ENV.__MIDHUB_MCHVH_CLEANUP)
+end
+
+showToggleNotification("Mid Hub HvH", true, CFG.menuKeybind)
+
+end)

@@ -522,6 +522,16 @@ local CFG = {
     fakeLagGhost      = true,
     fakeLagAcGuard    = true,
 
+    -- Backtrack (Latency Ghost Hitbox)
+    backtrackEnabled      = false,
+    backtrackMs           = 150,
+    backtrackVisuals      = true,
+
+    -- Backtrap & Knockback Deflector
+    backtrapEnabled       = false,
+    backtrapDistance      = 3.2,
+    backtrapDoubleHeight  = false,
+
     -- Auto Trap / Block Cage
     autoTrap          = false,
     trapRange         = 15,
@@ -946,6 +956,61 @@ local function updateFakeLagGhost(targetCF, char)
         local origPart = char:FindFirstChild(ghostPart.Name)
         if origPart and origPart:IsA("BasePart") then
             local relOffset = myRoot.CFrame:ToObjectSpace(origPart.CFrame)
+            ghostPart.CFrame = targetCF * relOffset
+        end
+    end
+end
+
+-- 🕒 BACKTRACK STATE & GHOST HITBOX SYSTEM
+local backtrackHistory = {}
+local backtrackGhostFolder = nil
+
+local function cleanupBacktrackGhost()
+    if backtrackGhostFolder then
+        pcall(function() backtrackGhostFolder:Destroy() end)
+        backtrackGhostFolder = nil
+    end
+end
+
+local function updateBacktrackGhost(targetChar, targetCF)
+    if not CFG.backtrackVisuals or not CFG.backtrackEnabled or not targetChar or not targetCF then
+        cleanupBacktrackGhost()
+        return
+    end
+
+    local tRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    if not tRoot then return end
+
+    if not backtrackGhostFolder or not backtrackGhostFolder.Parent then
+        backtrackGhostFolder = Instance.new("Folder")
+        backtrackGhostFolder.Name = "MidHub_BacktrackGhost"
+        backtrackGhostFolder.Parent = workspace
+    end
+
+    local existingParts = backtrackGhostFolder:GetChildren()
+    if #existingParts == 0 then
+        for _, part in ipairs(targetChar:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                local ghostPart = Instance.new("Part")
+                ghostPart.Name = part.Name
+                ghostPart.Size = part.Size
+                ghostPart.Anchored = true
+                ghostPart.CanCollide = false
+                ghostPart.CanTouch = false
+                ghostPart.CanQuery = false
+                ghostPart.CastShadow = false
+                ghostPart.Material = Enum.Material.Neon
+                ghostPart.Color = Color3.fromRGB(0, 230, 255)
+                ghostPart.Transparency = 0.55
+                ghostPart.Parent = backtrackGhostFolder
+            end
+        end
+    end
+
+    for _, ghostPart in ipairs(backtrackGhostFolder:GetChildren()) do
+        local origPart = targetChar:FindFirstChild(ghostPart.Name)
+        if origPart and origPart:IsA("BasePart") then
+            local relOffset = tRoot.CFrame:ToObjectSpace(origPart.CFrame)
             ghostPart.CFrame = targetCF * relOffset
         end
     end
@@ -2253,6 +2318,12 @@ MODS.KillAura     = registerBindableModule("KillAura",     "Kill Aura",        "
         targetHighlight.Adornee = nil
     end
 end)
+MODS.Backtrack    = registerBindableModule("Backtrack",    "Backtrack",        "backtrackEnabled", Enum.KeyCode.Unknown, function(v)
+    if not v then
+        cleanupBacktrackGhost()
+    end
+end)
+MODS.Backtrap     = registerBindableModule("Backtrap",     "Backtrap KB",      "backtrapEnabled",  Enum.KeyCode.Unknown, nil)
 MODS.Criticals    = registerBindableModule("Criticals",    "Critical Hits",    "criticalsEnabled", Enum.KeyCode.Unknown, nil)
 MODS.Spinbot      = registerBindableModule("Spinbot",      "Spinbot / Yaw",    "yawEnabled",      Enum.KeyCode.Unknown, nil)
 MODS.FakeLag      = registerBindableModule("FakeLag",      "Fake Lag",         "fakeLagEnabled",  Enum.KeyCode.Unknown, function(v)
@@ -3009,6 +3080,47 @@ AuraSec:Slider({
     DisplayMethod = "Value",
     Precision = 1,
     Callback = function(v) CFG.strafeSpeed = v end
+})
+
+AuraSec:Header({ Name = "Backtrack (Latency Ghost Hitbox)" })
+bindMacToggle(AuraSec, MODS.Backtrack)
+
+AuraSec:Slider({
+    Name = "Backtrack Window (ms)",
+    Default = 150,
+    Minimum = 50,
+    Maximum = 300,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(v) CFG.backtrackMs = math.clamp(v, 50, 300) end
+})
+
+AuraSec:Toggle({
+    Name = "Backtrack Visual Ghost (Cyan)",
+    Default = true,
+    Callback = function(v)
+        CFG.backtrackVisuals = v
+        if not v then cleanupBacktrackGhost() end
+    end
+})
+
+AuraSec:Header({ Name = "Backtrap (Knockback Deflector)" })
+bindMacToggle(AuraSec, MODS.Backtrap)
+
+AuraSec:Slider({
+    Name = "Backtrap Distance (Studs)",
+    Default = 3.2,
+    Minimum = 1.6,
+    Maximum = 6.4,
+    DisplayMethod = "Value",
+    Precision = 1,
+    Callback = function(v) CFG.backtrapDistance = v end
+})
+
+AuraSec:Toggle({
+    Name = "Double Height Wall",
+    Default = false,
+    Callback = function(v) CFG.backtrapDoubleHeight = v end
 })
 
     local YawSec = Tabs.Rage:Section({ Side = "Right" })
@@ -4132,8 +4244,9 @@ task.spawn(function()
             end
 
             local maxAllowedReach = math.min(CFG.auraReach, 9.5)
-            local target, dist = getClosestEnemy(maxAllowedReach + 1.0)
-            if target and dist <= (maxAllowedReach + 1.0) then
+            local searchDist = maxAllowedReach + (CFG.backtrackEnabled and 3.2 or 1.0)
+            local target, dist = getClosestEnemy(searchDist)
+            if target and dist <= searchDist then
                 if CFG.highlightTarget then
                     targetHighlight.Adornee = target
                     targetHighlight.Enabled = true
@@ -4148,6 +4261,37 @@ task.spawn(function()
 
                 local tRoot = target:FindFirstChild("HumanoidRootPart")
                 if tRoot and not isTrappingNow and not c:GetAttribute("EatingApple") and not c:GetAttribute("BowDrawStarted") then
+                    local targetPlr = Players:GetPlayerFromCharacter(target)
+                    local targetSneaking = target:GetAttribute("Sneaking") == true
+                    local targetHitPos = tRoot.Position
+                    local targetHitTime = workspace:GetServerTimeNow()
+                    local isBacktracking = false
+
+                    -- Check if target is outside normal reach; if so, test recent backtrack history
+                    local curDist = (tRoot.Position - myRoot.Position).Magnitude
+                    if curDist > maxAllowedReach and CFG.backtrackEnabled and targetPlr then
+                        local hist = backtrackHistory[targetPlr]
+                        if hist and #hist > 0 then
+                            for _, tick in ipairs(hist) do
+                                local tickDist = (tick.pos - myRoot.Position).Magnitude
+                                if tickDist <= maxAllowedReach then
+                                    targetHitPos = tick.pos
+                                    targetHitTime = tick.serverTime
+                                    targetSneaking = tick.sneaking
+                                    isBacktracking = true
+                                    if CFG.backtrackVisuals then
+                                        updateBacktrackGhost(target, tick.cf)
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    else
+                        if CFG.backtrackVisuals then
+                            cleanupBacktrackGhost()
+                        end
+                    end
+
                     local isSneaking = c:GetAttribute("Sneaking") == true
                     local eye = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Eye)
                         and MinecraftMeleeGeometry.Eye(myRoot.Position, isSneaking)
@@ -4166,7 +4310,6 @@ task.spawn(function()
                         math.random(-15, 15) / 100
                     )
 
-                    local targetSneaking = target:GetAttribute("Sneaking") == true
                     local topY = targetSneaking and 1.82 or 2.15
                     local headY = targetSneaking and 1.05 or 1.32
                     local headOff = Vector3.new(0, headY, 0) + aimJitter
@@ -4199,12 +4342,12 @@ task.spawn(function()
 
                     if MinecraftMeleeGeometry and MinecraftMeleeGeometry.Hit then
                         for _, off in ipairs(multipointEdges) do
-                            local candDir = ((tRoot.Position + off) - eye).Unit
+                            local candDir = ((targetHitPos + off) - eye).Unit
                             -- Always pass the server's exact 9.600000000000001 reach constant to Hit()
                             local d, hp = MinecraftMeleeGeometry.Hit(
                                 eye,
                                 candDir,
-                                tRoot.Position,
+                                targetHitPos,
                                 targetSneaking,
                                 9.600000000000001
                             )
@@ -4233,9 +4376,9 @@ task.spawn(function()
                             version = 2,
                             character = c,
                             seq = seq,
-                            sentAt = workspace:GetServerTimeNow(),
+                            sentAt = targetHitTime,
                             eye = eye,
-                            targetRoot = tRoot.Position,
+                            targetRoot = targetHitPos,
                             hitPart = hitPartName,
                         }
 
@@ -4255,11 +4398,33 @@ task.spawn(function()
                         if CFG.criticalsEnabled and CFG.critVisualStars then
                             spawnCriticalHitEffect(target)
                         end
+
+                        -- Backtrap / Behind-Wall Knockback Deflector
+                        if CFG.backtrapEnabled and BuildingAction then
+                            task.spawn(function()
+                                local horizUnit = horizDir.Unit
+                                local behindPos = tRoot.Position + horizUnit * (CFG.backtrapDistance or 3.2)
+                                local targetGrid = (MinecraftBlockPlacement and MinecraftBlockPlacement.Snap) and MinecraftBlockPlacement.Snap(behindPos) or behindPos
+                                if not isBlockAt(targetGrid) then
+                                    placeBlockAtGridPos(targetGrid)
+                                end
+                                if CFG.backtrapDoubleHeight then
+                                    local upperGrid = targetGrid + Vector3.new(0, 3.2, 0)
+                                    if not isBlockAt(upperGrid) then
+                                        task.wait(0.02)
+                                        placeBlockAtGridPos(upperGrid)
+                                    end
+                                end
+                            end)
+                        end
                     end
                 end
             else
                 targetHighlight.Enabled = false
                 targetHighlight.Adornee = nil
+                if CFG.backtrackVisuals then
+                    cleanupBacktrackGhost()
+                end
             end
         end
     end
@@ -4501,6 +4666,54 @@ trackConn(RunService.RenderStepped:Connect(function()
 end))
 
 -- ========================================================================
+-- 🕒 BACKTRACK SAMPLING LOOP
+-- ========================================================================
+trackConn(RunService.Heartbeat:Connect(function()
+    if not CFG.backtrackEnabled then
+        if next(backtrackHistory) then
+            table.clear(backtrackHistory)
+        end
+        cleanupBacktrackGhost()
+        return
+    end
+
+    local now = os.clock()
+    local sNow = workspace:GetServerTimeNow()
+    local maxAge = math.clamp((CFG.backtrackMs or 150) / 1000, 0.05, 0.35)
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and plr.Character and canAttackTarget(plr.Character) then
+            local char = plr.Character
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if root and hum and hum.Health > 0 then
+                local hist = backtrackHistory[plr]
+                if not hist then
+                    hist = {}
+                    backtrackHistory[plr] = hist
+                end
+
+                table.insert(hist, 1, {
+                    cf = root.CFrame,
+                    pos = root.Position,
+                    time = now,
+                    serverTime = sNow,
+                    sneaking = char:GetAttribute("Sneaking") == true
+                })
+
+                while #hist > 0 and (now - hist[#hist].time) > maxAge do
+                    table.remove(hist)
+                end
+            else
+                backtrackHistory[plr] = nil
+            end
+        else
+            backtrackHistory[plr] = nil
+        end
+    end
+end))
+
+-- ========================================================================
 -- 👻 FAKE LAG / REPLICATION CHOKING LOOP (HvH DESYNC)
 -- ========================================================================
 do
@@ -4661,6 +4874,8 @@ ENV.__MIDHUB_MCHVH_CLEANUP = function()
     end
     table.clear(espRegistry)
     cleanupFakeLagGhost()
+    cleanupBacktrackGhost()
+    table.clear(backtrackHistory)
     pcall(function()
         local c = lp.Character
         local root = c and c:FindFirstChild("HumanoidRootPart")
