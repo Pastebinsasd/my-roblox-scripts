@@ -450,6 +450,7 @@ local MinecraftCombat    = ReplicatedStorage:WaitForChild("MinecraftCombat", 10)
 local AttackRemote       = MinecraftCombat and MinecraftCombat:WaitForChild("Attack", 5)
 local BlockRemote        = MinecraftCombat and MinecraftCombat:WaitForChild("Block", 5)
 local SprintRemote       = MinecraftCombat and MinecraftCombat:WaitForChild("Sprint", 5)
+local FeedbackRemote     = MinecraftCombat and MinecraftCombat:WaitForChild("Feedback", 5)
 
 local BuildingAction     = ReplicatedStorage:WaitForChild("BuildingAction", 10)
 local MinecraftBowAction = ReplicatedStorage:WaitForChild("MinecraftBowAction", 10)
@@ -482,6 +483,7 @@ local CFG = {
     -- HUD & Notifications
     showKeybindHud    = true,
     toggleNotifs      = true,
+    hitFailNotifs     = true,
     notifSound        = true,
     menuKeybind       = Enum.KeyCode.RightShift,
 
@@ -573,6 +575,23 @@ local CFG = {
     selectedSwordSkin = "default",
     selectedAura      = "default",
     selectedMcSkin    = "default",
+
+    -- High-Tier HvH Visual Chams (CS:GO / Minecraft Client Style)
+    enemyChams        = false,
+    enemyChamsStyle   = "Glow (AlwaysOnTop)",
+    enemyChamsColor   = "Blood Red",
+    enemyChamsTransp  = 35,
+    enemyChamsWall    = true,
+
+    selfChams         = false,
+    selfChamsStyle    = "ForceField (Animated)",
+    selfChamsColor    = "Electric Purple",
+    selfChamsTransp   = 30,
+
+    swordChams        = false,
+    swordChamsStyle   = "Glow (AlwaysOnTop)",
+    swordChamsColor   = "Neon Cyan",
+    swordChamsTransp  = 20,
 
     -- Ambience, Custom Skies & Weather
     customSkyEnabled  = false,
@@ -1646,6 +1665,114 @@ local function showToggleNotification(moduleName, stateBool, keyEnum)
     end)
 end
 
+local lastHitFailTime = {}
+local function showHitFailureNotification(reasonTitle, reasonDetail)
+    if not CFG.hitFailNotifs or not CFG.toggleNotifs then return end
+    local now = os.clock()
+    if (now - (lastHitFailTime[reasonTitle] or 0)) < 0.85 then return end
+    lastHitFailTime[reasonTitle] = now
+
+    notifSerial = notifSerial + 1
+    local card = Instance.new("Frame")
+    card.Name = "FailToast_" .. notifSerial
+    card.LayoutOrder = notifSerial
+    card.Size = UDim2.fromOffset(268, 46)
+    card.BackgroundColor3 = Color3.fromRGB(24, 15, 20)
+    card.BackgroundTransparency = 0.08
+    card.BorderSizePixel = 0
+    card.ClipsDescendants = true
+    card.Parent = notifContainer
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 9)
+    corner.Parent = card
+
+    local accentColor = Color3.fromRGB(244, 63, 94)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = accentColor
+    stroke.Thickness = 1.3
+    stroke.Transparency = 0.2
+    stroke.Parent = card
+
+    local sideBar = Instance.new("Frame")
+    sideBar.Size = UDim2.new(0, 4, 1, 0)
+    sideBar.BackgroundColor3 = accentColor
+    sideBar.BorderSizePixel = 0
+    sideBar.Parent = card
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -78, 0, 20)
+    titleLbl.Position = UDim2.fromOffset(14, 6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 13
+    titleLbl.TextColor3 = Color3.fromRGB(255, 225, 230)
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Text = "⚠ " .. reasonTitle
+    titleLbl.Parent = card
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, -78, 0, 16)
+    subLbl.Position = UDim2.fromOffset(14, 24)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Font = Enum.Font.Gotham
+    subLbl.TextSize = 11
+    subLbl.TextColor3 = Color3.fromRGB(215, 165, 175)
+    subLbl.TextXAlignment = Enum.TextXAlignment.Left
+    subLbl.Text = reasonDetail
+    subLbl.Parent = card
+
+    local pill = Instance.new("Frame")
+    pill.AnchorPoint = Vector2.new(1, 0.5)
+    pill.Position = UDim2.new(1, -10, 0.5, 0)
+    pill.Size = UDim2.fromOffset(50, 22)
+    pill.BackgroundColor3 = Color3.fromRGB(159, 18, 57)
+    pill.BorderSizePixel = 0
+    pill.Parent = card
+
+    local pillCorner = Instance.new("UICorner")
+    pillCorner.CornerRadius = UDim.new(1, 0)
+    pillCorner.Parent = pill
+
+    local pillTxt = Instance.new("TextLabel")
+    pillTxt.Size = UDim2.fromScale(1, 1)
+    pillTxt.BackgroundTransparency = 1
+    pillTxt.Font = Enum.Font.GothamBold
+    pillTxt.TextSize = 10
+    pillTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+    pillTxt.Text = "FAIL"
+    pillTxt.Parent = pill
+
+    task.delay(2.6, function()
+        if card and card.Parent then
+            local tw = TweenService:Create(card, TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromOffset(268, 0)
+            })
+            tw:Play()
+            task.wait(0.25)
+            if card and card.Parent then
+                card:Destroy()
+            end
+        end
+    end)
+end
+
+if FeedbackRemote then
+    trackConn(FeedbackRemote.OnClientEvent:Connect(function(a1, a2, a3, a4, a5)
+        if not CFG.hitFailNotifs then return end
+        if a1 == "Immune" then
+            showHitFailureNotification("Target Immune", "Target has spawn or post-hit invulnerability")
+        elseif a1 == "HitConfirm" and not a2 then
+            if a3 then
+                showHitFailureNotification("Shield Blocked", string.format("Enemy shield absorbed hit (-%s dmg)", tostring(a4 or 0)))
+            else
+                showHitFailureNotification("Hit Missed", "Server rejected melee attack")
+            end
+        end
+    end))
+end
+
 -- ========================================================================
 -- 🖥️ MODERN SLEEK KEYBINDS HUD (NEVERLOSE / ARGON HVH STYLE)
 -- ========================================================================
@@ -2360,6 +2487,9 @@ MODS.AntiLava     = registerBindableModule("AntiLava",     "Anti Lava",        "
     updateAntiLavaState()
 end)
 MODS.AntiVoid     = registerBindableModule("AntiVoid",     "Anti Void",        "antiVoid",        Enum.KeyCode.Unknown, nil)
+MODS.EnemyChams  = registerBindableModule("EnemyChams",  "Enemy Chams",      "enemyChams",      Enum.KeyCode.Unknown, nil)
+MODS.SelfChams   = registerBindableModule("SelfChams",   "Self Chams",       "selfChams",       Enum.KeyCode.Unknown, nil)
+MODS.SwordChams  = registerBindableModule("SwordChams",  "Sword Chams",      "swordChams",      Enum.KeyCode.Unknown, nil)
 
 updateHudHeight(isHudCollapsed)
 
@@ -3041,6 +3171,12 @@ AuraSec:Toggle({
     Callback = function(v) CFG.autoEquipSword = v end
 })
 
+AuraSec:Toggle({
+    Name = "Hit Failure Notifications",
+    Default = true,
+    Callback = function(v) CFG.hitFailNotifs = v end,
+})
+
 AuraSec:Header({ Name = "Critical Hits (HvH Crits)" })
 bindMacToggle(AuraSec, MODS.Criticals)
 
@@ -3624,6 +3760,95 @@ do
             CFG.selectedAura = v
             pcall(function() lp:SetAttribute("CosmeticAura", v) end)
         end
+    })
+
+    local ChamsSec = Tabs.Visuals:Section({ Side = "Right" })
+    ChamsSec:Header({ Name = "High-Tier HvH Chams (CS:GO / MC Style)" })
+
+    local chamsStyleList = { "Glow (AlwaysOnTop)", "ForceField (Animated)", "Neon Solid", "Glass (Crystal Refraction)", "Wireframe / Outline", "Flat Shaded", "Chroma / Rainbow" }
+    local chamsColorList = { "Blood Red", "Neon Cyan", "Hot Pink", "Electric Purple", "Acid Green", "Golden Yellow", "Clean White", "Deep Blue", "Sunset Orange", "Chroma Pulse" }
+
+    bindMacToggle(ChamsSec, MODS.EnemyChams)
+    ChamsSec:Dropdown({
+        Name = "Enemy Chams Style",
+        Multi = false,
+        Required = true,
+        Options = chamsStyleList,
+        Default = 1,
+        Callback = function(v) CFG.enemyChamsStyle = v end,
+    })
+    ChamsSec:Dropdown({
+        Name = "Enemy Chams Color",
+        Multi = false,
+        Required = true,
+        Options = chamsColorList,
+        Default = 1,
+        Callback = function(v) CFG.enemyChamsColor = v end,
+    })
+    ChamsSec:Slider({
+        Name = "Enemy Fill Transparency (%)",
+        Default = 35,
+        Minimum = 0,
+        Maximum = 100,
+        Precision = 0,
+        Callback = function(v) CFG.enemyChamsTransp = v end,
+    })
+    ChamsSec:Toggle({
+        Name = "Enemy Visible Through Walls",
+        Default = true,
+        Callback = function(v) CFG.enemyChamsWall = v end,
+    })
+
+    bindMacToggle(ChamsSec, MODS.SelfChams)
+    ChamsSec:Dropdown({
+        Name = "Self Chams Style",
+        Multi = false,
+        Required = true,
+        Options = chamsStyleList,
+        Default = 2,
+        Callback = function(v) CFG.selfChamsStyle = v end,
+    })
+    ChamsSec:Dropdown({
+        Name = "Self Chams Color",
+        Multi = false,
+        Required = true,
+        Options = chamsColorList,
+        Default = 4,
+        Callback = function(v) CFG.selfChamsColor = v end,
+    })
+    ChamsSec:Slider({
+        Name = "Self Fill Transparency (%)",
+        Default = 30,
+        Minimum = 0,
+        Maximum = 100,
+        Precision = 0,
+        Callback = function(v) CFG.selfChamsTransp = v end,
+    })
+
+    bindMacToggle(ChamsSec, MODS.SwordChams)
+    ChamsSec:Dropdown({
+        Name = "Sword Chams Style",
+        Multi = false,
+        Required = true,
+        Options = chamsStyleList,
+        Default = 1,
+        Callback = function(v) CFG.swordChamsStyle = v end,
+    })
+    ChamsSec:Dropdown({
+        Name = "Sword Chams Color",
+        Multi = false,
+        Required = true,
+        Options = chamsColorList,
+        Default = 2,
+        Callback = function(v) CFG.swordChamsColor = v end,
+    })
+    ChamsSec:Slider({
+        Name = "Sword Fill Transparency (%)",
+        Default = 20,
+        Minimum = 0,
+        Maximum = 100,
+        Precision = 0,
+        Callback = function(v) CFG.swordChamsTransp = v end,
     })
 end
 
@@ -4256,6 +4481,9 @@ task.spawn(function()
             if isInSpawnSafezone(myRoot.Position) and not c:GetAttribute("DuelId") then
                 targetHighlight.Enabled = false
                 targetHighlight.Adornee = nil
+                if CFG.hitFailNotifs then
+                    showHitFailureNotification("Spawn Safezone", "Attacks disabled in sky spawn area")
+                end
                 continue
             end
 
@@ -4361,6 +4589,9 @@ task.spawn(function()
                     local hitDist = nil
                     local hitPartName = nil
 
+                    local hadGeoHit = false
+                    local hadWallBlock = false
+
                     if MinecraftMeleeGeometry and MinecraftMeleeGeometry.Hit then
                         for _, off in ipairs(multipointEdges) do
                             local candDir = ((targetHitPos + off) - eye).Unit
@@ -4372,11 +4603,26 @@ task.spawn(function()
                                 targetSneaking,
                                 9.600000000000001
                             )
-                            if d and d <= maxAllowedReach and isLineOfSightClear(eye, candDir, d) then
-                                unitDir = candDir
-                                hitDist = d
-                                hitPartName = hp or chosenPart
-                                break
+                            if d and d <= maxAllowedReach then
+                                hadGeoHit = true
+                                if isLineOfSightClear(eye, candDir, d) then
+                                    unitDir = candDir
+                                    hitDist = d
+                                    hitPartName = hp or chosenPart
+                                    break
+                                else
+                                    hadWallBlock = true
+                                end
+                            end
+                        end
+                    end
+
+                    if not (unitDir and hitDist and hitDist <= maxAllowedReach) then
+                        if CFG.hitFailNotifs then
+                            if hadWallBlock then
+                                showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
+                            elseif not hadGeoHit then
+                                showHitFailureNotification("Angle / Reach Miss", "Target hitbox not intersecting attack angle")
                             end
                         end
                     end
@@ -4735,6 +4981,210 @@ trackConn(RunService.Heartbeat:Connect(function()
 end))
 
 -- ========================================================================
+-- ✨ HIGH-TIER HVH CHAMS SYSTEM (CS:GO / MINECRAFT CLIENT STYLE)
+-- ========================================================================
+local CHAMS_COLORS = {
+    ["Blood Red"]        = Color3.fromRGB(255, 45, 65),
+    ["Neon Cyan"]        = Color3.fromRGB(0, 235, 255),
+    ["Hot Pink"]         = Color3.fromRGB(255, 60, 160),
+    ["Electric Purple"]  = Color3.fromRGB(168, 85, 247),
+    ["Acid Green"]       = Color3.fromRGB(50, 255, 100),
+    ["Golden Yellow"]    = Color3.fromRGB(255, 215, 0),
+    ["Clean White"]      = Color3.fromRGB(255, 255, 255),
+    ["Deep Blue"]        = Color3.fromRGB(30, 120, 255),
+    ["Sunset Orange"]    = Color3.fromRGB(255, 120, 30),
+    ["Chroma Pulse"]     = "rainbow",
+}
+
+local function resolveChamsColor(colorName, offset)
+    if colorName == "Chroma Pulse" or colorName == "Chroma / Rainbow" then
+        local hue = ((os.clock() * 0.45) + (offset or 0)) % 1
+        return Color3.fromHSV(hue, 0.85, 1)
+    end
+    return CHAMS_COLORS[colorName] or Color3.fromRGB(0, 235, 255)
+end
+
+local function getChamsMaterial(styleName)
+    if styleName == "ForceField (Animated)" then
+        return Enum.Material.ForceField
+    elseif styleName == "Neon Solid" then
+        return Enum.Material.Neon
+    elseif styleName == "Glass (Crystal Refraction)" then
+        return Enum.Material.Glass
+    elseif styleName == "Flat Shaded" then
+        return Enum.Material.SmoothPlastic
+    end
+    return nil
+end
+
+local chamsOriginalProps = setmetatable({}, { __mode = "k" })
+
+local function applyMaterialToModel(model, mat, col)
+    if not model then return end
+    for _, part in ipairs(model:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if not chamsOriginalProps[part] then
+                chamsOriginalProps[part] = { mat = part.Material, color = part.Color }
+            end
+            if mat then
+                part.Material = mat
+            end
+            if col and mat ~= Enum.Material.ForceField then
+                part.Color = col
+            end
+        end
+    end
+end
+
+local function restoreModelMaterials(model)
+    if not model then return end
+    for _, part in ipairs(model:GetDescendants()) do
+        if part:IsA("BasePart") and chamsOriginalProps[part] then
+            local orig = chamsOriginalProps[part]
+            pcall(function()
+                part.Material = orig.mat
+                part.Color = orig.color
+            end)
+            chamsOriginalProps[part] = nil
+        end
+    end
+end
+
+local function updateHighlightCham(model, hlName, color, transpPct, depthMode, isWireframe)
+    if not model or not model.Parent then return end
+    local hl = model:FindFirstChild(hlName)
+    if not hl or not hl:IsA("Highlight") then
+        hl = Instance.new("Highlight")
+        hl.Name = hlName
+        hl.Adornee = model
+        hl.Parent = model
+    end
+    hl.Enabled = true
+    hl.FillColor = color
+    hl.FillTransparency = isWireframe and 1 or math.clamp(transpPct / 100, 0, 1)
+    hl.OutlineColor = isWireframe and color or Color3.fromRGB(255, 255, 255)
+    hl.OutlineTransparency = 0.05
+    hl.DepthMode = depthMode or Enum.HighlightDepthMode.AlwaysOnTop
+end
+
+local function removeHighlightCham(model, hlName)
+    if not model then return end
+    local hl = model:FindFirstChild(hlName)
+    if hl and hl:IsA("Highlight") then
+        pcall(function() hl:Destroy() end)
+    end
+end
+
+local function cleanupAllChams()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            removeHighlightCham(plr.Character, "MidHub_EnemyChams")
+            restoreModelMaterials(plr.Character)
+        end
+    end
+    local myChar = lp.Character
+    if myChar then
+        removeHighlightCham(myChar, "MidHub_SelfChams")
+        restoreModelMaterials(myChar)
+        local myTool = myChar:FindFirstChildOfClass("Tool")
+        if myTool then
+            removeHighlightCham(myTool, "MidHub_SwordChams")
+            restoreModelMaterials(myTool)
+        end
+    end
+    if camera then
+        local myVm = camera:FindFirstChild("MinecraftSwordViewmodel")
+        if myVm then
+            removeHighlightCham(myVm, "MidHub_SwordVmChams")
+            restoreModelMaterials(myVm)
+        end
+    end
+end
+
+trackConn(RunService.Heartbeat:Connect(function()
+    -- 1. Self Chams
+    local myChar = lp.Character
+    if myChar then
+        if CFG.selfChams then
+            local sCol = resolveChamsColor(CFG.selfChamsColor, 0)
+            local isWire = (CFG.selfChamsStyle == "Wireframe / Outline")
+            updateHighlightCham(myChar, "MidHub_SelfChams", sCol, CFG.selfChamsTransp, Enum.HighlightDepthMode.AlwaysOnTop, isWire)
+            local sMat = getChamsMaterial(CFG.selfChamsStyle)
+            local body = myChar:FindFirstChild("MinecraftBody")
+            if sMat then
+                applyMaterialToModel(body or myChar, sMat, sCol)
+            else
+                restoreModelMaterials(body or myChar)
+            end
+        else
+            removeHighlightCham(myChar, "MidHub_SelfChams")
+            local body = myChar:FindFirstChild("MinecraftBody")
+            restoreModelMaterials(body or myChar)
+        end
+    end
+
+    -- 2. Sword / Hand Chams
+    local myTool = myChar and myChar:FindFirstChildOfClass("Tool")
+    local myVm = camera and camera:FindFirstChild("MinecraftSwordViewmodel")
+    if CFG.swordChams then
+        local swCol = resolveChamsColor(CFG.swordChamsColor, 0.25)
+        local isWire = (CFG.swordChamsStyle == "Wireframe / Outline")
+        local swMat = getChamsMaterial(CFG.swordChamsStyle)
+        if myTool then
+            updateHighlightCham(myTool, "MidHub_SwordChams", swCol, CFG.swordChamsTransp, Enum.HighlightDepthMode.AlwaysOnTop, isWire)
+            if swMat then
+                applyMaterialToModel(myTool, swMat, swCol)
+            else
+                restoreModelMaterials(myTool)
+            end
+        end
+        if myVm then
+            updateHighlightCham(myVm, "MidHub_SwordVmChams", swCol, CFG.swordChamsTransp, Enum.HighlightDepthMode.AlwaysOnTop, isWire)
+            if swMat then
+                applyMaterialToModel(myVm, swMat, swCol)
+            else
+                restoreModelMaterials(myVm)
+            end
+        end
+    else
+        if myTool then
+            removeHighlightCham(myTool, "MidHub_SwordChams")
+            restoreModelMaterials(myTool)
+        end
+        if myVm then
+            removeHighlightCham(myVm, "MidHub_SwordVmChams")
+            restoreModelMaterials(myVm)
+        end
+    end
+
+    -- 3. Enemy Chams
+    local eCol = resolveChamsColor(CFG.enemyChamsColor, 0.5)
+    local eWire = (CFG.enemyChamsStyle == "Wireframe / Outline")
+    local eMat = getChamsMaterial(CFG.enemyChamsStyle)
+    local eDepth = CFG.enemyChamsWall and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and plr.Character then
+            local char = plr.Character
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if CFG.enemyChams and hum and hum.Health > 0 and canAttackTarget(char) then
+                updateHighlightCham(char, "MidHub_EnemyChams", eCol, CFG.enemyChamsTransp, eDepth, eWire)
+                local eBody = char:FindFirstChild("MinecraftBody")
+                if eMat then
+                    applyMaterialToModel(eBody or char, eMat, eCol)
+                else
+                    restoreModelMaterials(eBody or char)
+                end
+            else
+                removeHighlightCham(char, "MidHub_EnemyChams")
+                local eBody = char:FindFirstChild("MinecraftBody")
+                restoreModelMaterials(eBody or char)
+            end
+        end
+    end
+end))
+
+-- ========================================================================
 -- 👻 FAKE LAG / REPLICATION CHOKING LOOP (HvH DESYNC)
 -- ========================================================================
 do
@@ -4902,6 +5352,7 @@ ENV.__MIDHUB_MCHVH_CLEANUP = function()
     table.clear(espRegistry)
     cleanupFakeLagGhost()
     cleanupBacktrackGhost()
+    cleanupAllChams()
     table.clear(backtrackHistory)
     pcall(function()
         local c = lp.Character
