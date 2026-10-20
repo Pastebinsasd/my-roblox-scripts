@@ -1450,6 +1450,13 @@ local function setThirdPersonView(v)
             lp.CameraMaxZoomDistance = 0.5
         end
         local c = getChar()
+        local hum = getHum(c)
+        if hum then
+            hum.AutoRotate = not enabled
+            if enabled and camera then
+                camera.CameraSubject = hum
+            end
+        end
         local body = c and c:FindFirstChild("MinecraftBody")
         if body then
             for _, d in ipairs(body:GetDescendants()) do
@@ -4166,6 +4173,20 @@ do
 
                 hum.AutoRotate = false
                 root.CFrame = CFrame.new(pos) * CFrame.Angles(0, finalYaw, 0)
+            elseif CFG.thirdPersonHvH then
+                -- Lock character horizontal facing to camera look direction in Third Person HvH
+                -- Keeps the camera centered strictly behind the player's back, eliminating any drift/detachment when idle or moving
+                local pos = root.Position
+                local camLook = camera.CFrame.LookVector
+                local horizCam = Vector3.new(camLook.X, 0, camLook.Z)
+                if horizCam.Magnitude > 0.01 then
+                    local baseYaw = math.atan2(-camLook.X, -camLook.Z)
+                    hum.AutoRotate = false
+                    root.CFrame = CFrame.new(pos) * CFrame.Angles(0, baseYaw, 0)
+                end
+                if camera and hum and camera.CameraSubject ~= hum then
+                    camera.CameraSubject = hum
+                end
             else
                 hum.AutoRotate = true
             end
@@ -4807,19 +4828,25 @@ end
 if type(STATE) == "table" and type(STATE.namecallHook) == "function" then
     pcall(function()
         STATE.namecallHook("ViewportPointToRay", function(self, method, ...)
-            if CFG.killAura and self == workspace.CurrentCamera then
-                local c = getChar()
-                local myRoot = getRoot(c)
-                if c and myRoot and not isInSpawnSafezone(myRoot.Position) then
-                    local target = getClosestEnemy(math.max(CFG.auraReach, 10.4))
-                    local tRoot = target and target:FindFirstChild("HumanoidRootPart")
-                    if tRoot then
-                        local isSneaking = c:GetAttribute("Sneaking") == true
-                        local eye = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Eye)
-                            and MinecraftMeleeGeometry.Eye(myRoot.Position, isSneaking)
-                            or (myRoot.Position + Vector3.new(0, isSneaking and 1.15 or 1.5, 0))
-                        local aimPt = tRoot.Position + ((CFG.auraHitPart == "Body") and Vector3.new(0, -0.35, 0) or Vector3.new(0, 1.35, 0))
-                        return Ray.new(eye, (aimPt - eye).Unit)
+            local args = { ... }
+            local x, y = args[1], args[2]
+            if CFG.killAura and self == workspace.CurrentCamera and typeof(x) == "number" and typeof(y) == "number" then
+                local vp = self.ViewportSize
+                -- Only intercept center-screen manual attack queries from performAttack; ignore corner rays from Popper / camera collision
+                if math.abs(x - vp.X * 0.5) <= 6 and math.abs(y - vp.Y * 0.5) <= 6 then
+                    local c = getChar()
+                    local myRoot = getRoot(c)
+                    if c and myRoot and not isInSpawnSafezone(myRoot.Position) then
+                        local target = getClosestEnemy(math.max(CFG.auraReach, 10.4))
+                        local tRoot = target and target:FindFirstChild("HumanoidRootPart")
+                        if tRoot then
+                            local isSneaking = c:GetAttribute("Sneaking") == true
+                            local eye = (MinecraftMeleeGeometry and MinecraftMeleeGeometry.Eye)
+                                and MinecraftMeleeGeometry.Eye(myRoot.Position, isSneaking)
+                                or (myRoot.Position + Vector3.new(0, isSneaking and 1.15 or 1.5, 0))
+                            local aimPt = tRoot.Position + ((CFG.auraHitPart == "Body") and Vector3.new(0, -0.35, 0) or Vector3.new(0, 1.35, 0))
+                            return Ray.new(eye, (aimPt - eye).Unit)
+                        end
                     end
                 end
             end
