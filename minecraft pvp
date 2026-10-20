@@ -1761,14 +1761,9 @@ end
 if FeedbackRemote then
     trackConn(FeedbackRemote.OnClientEvent:Connect(function(a1, a2, a3, a4, a5)
         if not CFG.hitFailNotifs then return end
-        if a1 == "Immune" then
-            showHitFailureNotification("Target Immune", "Target has spawn or post-hit invulnerability")
-        elseif a1 == "HitConfirm" and not a2 then
-            if a3 then
-                showHitFailureNotification("Shield Blocked", string.format("Enemy shield absorbed hit (-%s dmg)", tostring(a4 or 0)))
-            else
-                showHitFailureNotification("Hit Missed", "Server rejected melee attack")
-            end
+        -- Filter out post-hit i-frame damage tick immunity & fast CPS rejections; only alert on real enemy shield blocks
+        if a1 == "HitConfirm" and not a2 and a3 then
+            showHitFailureNotification("Shield Blocked", string.format("Enemy shield absorbed hit (-%s dmg)", tostring(a4 or 0)))
         end
     end))
 end
@@ -4618,12 +4613,8 @@ task.spawn(function()
                     end
 
                     if not (unitDir and hitDist and hitDist <= maxAllowedReach) then
-                        if CFG.hitFailNotifs then
-                            if hadWallBlock then
-                                showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
-                            elseif not hadGeoHit then
-                                showHitFailureNotification("Angle / Reach Miss", "Target hitbox not intersecting attack angle")
-                            end
+                        if CFG.hitFailNotifs and hadWallBlock then
+                            showHitFailureNotification("Wall Obstructed", "Line of sight to target blocked by block / obstacle")
                         end
                     end
 
